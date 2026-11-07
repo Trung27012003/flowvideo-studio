@@ -44,7 +44,8 @@ public record RenderRequest(
     double MusicGain = .18,
     string Fit = "contain",
     double FadeSeconds = 0,
-    bool DuckMusic = false
+    bool DuckMusic = false,
+    RenderEffects? Effects = null
 );
 
 public record SceneClip(Guid AssetId, double Duration, double Start = 0, string Caption = "");

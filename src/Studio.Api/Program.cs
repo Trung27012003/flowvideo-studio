@@ -38,7 +38,7 @@ using (var scope = app.Services.CreateScope())
 }
 app.UseDefaultFiles();
 app.UseStaticFiles();
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.7.0" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.8.0" }));
 app.MapGet(
     "/api/capabilities",
     (IConfiguration c) =>
@@ -161,6 +161,7 @@ app.MapGet(
                 x.Status,
                 x.Message,
                 x.CreatedAt,
+                x.RequestJson,
             })
             .ToListAsync();
         return Results.Ok(
@@ -171,6 +172,7 @@ app.MapGet(
                 x.Status,
                 x.Message,
                 x.CreatedAt,
+                hasAudio = HasAudio(x.RequestJson),
                 hasSubtitles = x.Status == "Succeeded" && File.Exists(store.Subtitles(x.Id)),
             })
         );
@@ -183,7 +185,8 @@ app.MapPost(
         if (!await db.Projects.AnyAsync(x => x.Id == id))
             return Results.NotFound();
         if (
-            req.Fit is not ("contain" or "cover")
+            (req.Effects is not null && !req.Effects.Valid())
+            || req.Fit is not ("contain" or "cover")
             || !double.IsFinite(req.FadeSeconds)
             || req.FadeSeconds is < 0 or > 2
             || req.Resolution is not (720 or 1080)
@@ -427,8 +430,14 @@ app.MapStoryboard();
 app.MapImages();
 app.MapProjectTools();
 app.MapWorkspaceTools();
+app.MapMediaTools();
 app.Map("/api/{**path}", () => Results.NotFound());
 app.MapFallbackToFile("index.html");
+static bool HasAudio(string json)
+{
+    var request = JsonSerializer.Deserialize<RenderRequest>(json);
+    return request?.VoiceId is not null || request?.MusicId is not null;
+}
 app.Run();
 
 public partial class Program { }

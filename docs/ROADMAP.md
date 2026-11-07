@@ -63,6 +63,14 @@
 - [x] 3 chức năng dựng: contain/cover, fade video/audio và sidechain duck nhạc.
 - [x] Danh sách và giới hạn từng mục: [BATCH-V07](BATCH-V07.md).
 
+## V0.8 — đợt 30 chức năng đã bổ sung
+
+- [x] 16 hiệu chỉnh dựng hình và audio, lưu cùng storyboard/job.
+- [x] Thumbnail, ảnh sóng âm, trích frame và tách audio.
+- [x] 6 công cụ phụ đề: cleanup, dedupe, CPS, TXT, split và clamp.
+- [x] 4 tiện ích hàng đợi/bản xuất: filter, sort, recipe và MP3.
+- [x] Hướng dẫn từng mục: [BATCH-V08](BATCH-V08.md).
+
 ## Tiếp theo — chất lượng nền tảng (2–3 tuần)
 
 - ffprobe kiểm tra file ngay sau upload; duration, thumbnail, waveform

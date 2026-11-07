@@ -724,3 +724,13 @@ dd {
   margin: 0;
   overflow-wrap: anywhere;
 }
+
+.subtitle-report {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.8;
+  padding: 14px;
+  border: 1px solid #334155;
+  border-radius: 10px;
+}

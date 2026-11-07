@@ -82,6 +82,27 @@ with tempfile.TemporaryDirectory(prefix='flowvideo-smoke-') as folder:
             assert audio_rms(outputs['duck'],.2,.5)<audio_rms(outputs['contain'],.2,.5)*.85
             assert audio_rms(outputs['fade'],0,.05)<audio_rms(outputs['fade'],.5,.1)*.3
             print('PASS contain/cover pixels, fade in/out pixels and audio, sidechain music ducking, loop duration')
+            # v0.8 effects: validate decoded pixels, fps, delayed/sped voice and normalized level.
+            effects_outputs={}
+            for label,effects in [('gray',{'brightness':.1,'contrast':1.2,'saturation':0}),('border',{'background':'#ff00ff','fps':60,'quality':'high'}),('voice',{'voiceDelay':.25,'voiceSpeed':1.5,'normalizeVoice':True,'mono':True})]:
+                body={'assetIds':[clip],'mode':'loop','duration':2,'ratio':'16:9','effects':effects}
+                if label=='voice':body['voiceId']=voice
+                job=request(f'/projects/{p}/renders',body);wait_job(p,job)
+                output=folder/('effect-'+label+'.mp4');urllib.request.urlretrieve(BASE+f'/jobs/{job["id"]}/download',output);effects_outputs[label]=output
+            gray=pixel_at(effects_outputs['gray'],.5,640,360);assert max(gray)-min(gray)<5 and min(gray)>70,tuple(gray)
+            border=pixel_at(effects_outputs['border'],.5,2,360);assert border[0]>220 and border[1]<30 and border[2]>220,tuple(border)
+            assert next(s for s in probe(effects_outputs['border'])['streams'] if s['codec_type']=='video')['r_frame_rate']=='60/1'
+            voice_stream=next(s for s in probe(effects_outputs['voice'])['streams'] if s['codec_type']=='audio');assert voice_stream['channels']==1
+            assert audio_rms(effects_outputs['voice'],.02,.1)<.003
+            assert audio_rms(effects_outputs['voice'],.35,.2)>.04
+            assert audio_rms(effects_outputs['voice'],1.1,.2)<.003
+            ffmpeg('-f','lavfi','-i','color=c=red:s=320x240:d=1','-vf','drawbox=x=160:y=0:w=160:h=120:c=blue:t=fill,drawbox=x=0:y=120:w=160:h=120:c=green:t=fill,drawbox=x=160:y=120:w=160:h=120:c=yellow:t=fill','-c:v','libx264','-pix_fmt','yuv420p',str(folder/'quadrants.mp4'))
+            quadrants=upload(p,folder/'quadrants.mp4')['id']
+            job=request(f'/projects/{p}/renders',{'assetIds':[quadrants],'duration':1,'ratio':'16:9','fit':'cover','effects':{'rotation':90,'flipHorizontal':True,'flipVertical':True,'sharpen':.5,'vignette':True,'quality':'compact','fps':24}});wait_job(p,job)
+            oriented=folder/'oriented.mp4';urllib.request.urlretrieve(BASE+f'/jobs/{job["id"]}/download',oriented)
+            corner=pixel_at(oriented,.3,320,180);assert corner[2]>150 and corner[0]<40,tuple(corner)
+            assert next(s for s in probe(oriented)['streams'] if s['codec_type']=='video')['r_frame_rate']=='24/1'
+            print('PASS effects: color correction/grayscale, background, 24/60 fps, quality modes, rotate+flip, sharpen/vignette, voice delay/speed/loudnorm and mono')
             # Trim must select the requested content, not just shorten the output.
             ffmpeg('-f','lavfi','-i','color=c=red:s=320x240:d=1','-f','lavfi','-i','color=c=blue:s=320x240:d=1','-filter_complex','[0:v][1:v]concat=n=2:v=1:a=0[v]','-map','[v]','-c:v','libx264','-pix_fmt','yuv420p',str(folder/'colors.mp4'))
             colors=upload(p,folder/'colors.mp4')['id']

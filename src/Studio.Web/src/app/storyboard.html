@@ -81,6 +81,11 @@
         nhạc khi có giọng storyboard</label
       >
     </div>
+    <app-render-options
+      [(options)]="effects"
+      context="Storyboard"
+      [disabled]="disabled() || working()"
+    />
     <div class="preset-actions">
       <span>Preset nhanh</span
       ><button class="secondary" (click)="preset('shorts')">Preset Shorts</button

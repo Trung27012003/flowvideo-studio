@@ -123,6 +123,7 @@ public class RenderWorker(
     private async Task Render(RenderJob job, StudioDb db, CancellationToken ct)
     {
         var req = JsonSerializer.Deserialize<RenderRequest>(job.RequestJson)!;
+        var effects = req.Effects ?? new RenderEffects();
         var needed = req
             .AssetIds.Concat(new[] { req.VoiceId, req.MusicId, req.SubtitleId }.OfType<Guid>())
             .Distinct()
@@ -186,10 +187,7 @@ public class RenderWorker(
                         args.AddRange(["-loop", "1"]);
                     if (start > 0)
                         args.AddRange(["-ss", Number(start)]);
-                    var filter =
-                        req.Fit == "cover"
-                            ? $"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1,fps=30"
-                            : $"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30";
+                    var filter = effects.VideoFilter(w, h, req.Fit);
                     if (scene is not null && a.Kind == "video")
                         filter += $",tpad=stop_mode=clone:stop_duration={Number(take)}";
                     args.AddRange([
@@ -209,7 +207,7 @@ public class RenderWorker(
                         "-preset",
                         "veryfast",
                         "-crf",
-                        "23",
+                        effects.Crf,
                         "-pix_fmt",
                         "yuv420p",
                         part,
@@ -256,7 +254,19 @@ public class RenderWorker(
             if (req.MusicId is Guid music)
             {
                 musicIndex = audioIndex++;
-                final.AddRange(["-stream_loop", "-1", "-i", store.AssetPath(assets[music])]);
+                if (effects.MusicStart > 0)
+                {
+                    var duration = await MediaProcess.AudioDuration(
+                        store.AssetPath(assets[music]),
+                        ct
+                    );
+                    if (effects.MusicStart >= duration)
+                        throw new IOException("Music start exceeds source duration.");
+                }
+                final.AddRange(["-stream_loop", "-1"]);
+                if (effects.MusicStart > 0)
+                    final.AddRange(["-ss", Number(effects.MusicStart)]);
+                final.AddRange(["-i", store.AssetPath(assets[music])]);
             }
             var hasCaptions = req.SubtitleId is not null || captions.Count > 0;
             if (captions.Count > 0)
@@ -287,18 +297,20 @@ public class RenderWorker(
                     ? $",afade=t=in:st=0:d={Number(fade)},afade=t=out:st={Number(endTime - fade)}:d={Number(fade)}"
                     : "";
             final.AddRange(["-map", "0:v:0"]);
-            const string limiter = "alimiter=limit=0.95:level=false:latency=true";
+            var limiter =
+                (effects.Mono ? "aformat=channel_layouts=mono," : "")
+                + "alimiter=limit=0.95:level=false:latency=true";
             if (voiceIndex is int vi && musicIndex is int mi)
             {
                 var mixer = req.DuckMusic
-                    ? $"[{vi}:a]volume={Number(req.VoiceGain)},apad,asplit=2[v][side];[{mi}:a]volume={Number(req.MusicGain)}[m];[m][side]sidechaincompress=threshold=0.02:ratio=8:attack=20:release=300[duck];[v][duck]amix=inputs=2:duration=longest:normalize=0,{limiter}{audioFade}[a]"
-                    : $"[{vi}:a]volume={Number(req.VoiceGain)},apad[v];[{mi}:a]volume={Number(req.MusicGain)}[m];[v][m]amix=inputs=2:duration=longest:normalize=0,{limiter}{audioFade}[a]";
+                    ? $"[{vi}:a]{effects.VoiceFilter(req.VoiceGain)},asplit=2[v][side];[{mi}:a]volume={Number(req.MusicGain)}[m];[m][side]sidechaincompress=threshold=0.02:ratio=8:attack=20:release=300[duck];[v][duck]amix=inputs=2:duration=longest:normalize=0,{limiter}{audioFade}[a]"
+                    : $"[{vi}:a]{effects.VoiceFilter(req.VoiceGain)}[v];[{mi}:a]volume={Number(req.MusicGain)}[m];[v][m]amix=inputs=2:duration=longest:normalize=0,{limiter}{audioFade}[a]";
                 final.AddRange(["-filter_complex", mixer, "-map", "[a]"]);
             }
             else if (voiceIndex is int v)
                 final.AddRange([
                     "-af",
-                    $"volume={Number(req.VoiceGain)},apad,{limiter}{audioFade}",
+                    $"{effects.VoiceFilter(req.VoiceGain)},{limiter}{audioFade}",
                     "-map",
                     $"{v}:a",
                 ]);
@@ -323,10 +335,14 @@ public class RenderWorker(
                     "-preset",
                     "veryfast",
                     "-crf",
-                    "23",
+                    effects.Crf,
                     "-pix_fmt",
                     "yuv420p",
                 ]);
+            if (effects.NormalizeVoice && req.VoiceId is not null)
+                final.AddRange(["-ar", "48000"]);
+            if (effects.Mono)
+                final.AddRange(["-ac", "1"]);
             final.AddRange(["-c:a", "aac", "-movflags", "+faststart", "export.mp4"]);
             job.Message = "Đang ghép và xuất MP4";
             await db.SaveChangesAsync(ct);

@@ -6,7 +6,7 @@ Studio video cá nhân bằng **Angular 21 + ASP.NET Core / .NET 10 + FFmpeg**. 
 
 ![Giao diện FlowVideo Studio](docs/studio-preview.png)
 
-## Trạng thái v0.7
+## Trạng thái v0.8
 
 **Đã triển khai:** tạo/chọn dự án; nhập ảnh, video, audio, SRT; chọn và sắp xếp cảnh; cắt điểm vào/ra từng clip; ghép ảnh/video; loop trực tiếp một nguồn; thêm giọng đọc từ file và nhạc nền; burn-in SRT; hàng đợi, hủy job đang chờ/đang chạy, thử lại job lỗi; preview/tải MP4; tạo kịch bản, giọng đọc AI và phụ đề từ lời nói khi cấu hình API key; chỉnh sửa/lưu SRT không cần AI; lưu kịch bản và storyboard theo dự án; dựng theo thời lượng từng cảnh và tạo phụ đề từ lời cảnh; tạo ảnh AI theo prompt từng cảnh với hàng đợi, lịch sử và giới hạn lượt.
 
@@ -32,6 +32,12 @@ Tạo dự án → nhập media → chọn cảnh theo thứ tự → chỉnh đ
 Đặt biến môi trường `OPENAI_API_KEY` trong terminal chạy backend; `OPENAI_MODEL` mặc định `gpt-4o-mini`. Không đặt key trong Angular hay commit vào Git. File `.env.example` chỉ là mẫu; ứng dụng **không tự đọc `.env`**. Tạo kịch bản, giọng đọc và nhận diện phụ đề đều có thể phát sinh phí. `OPENAI_TTS_MODEL` mặc định `gpt-4o-mini-tts`; STT dùng `whisper-1` để lấy mốc thời gian. Cần model được tài khoản cho phép sử dụng.
 
 Bấm **Lưu kịch bản** để giữ nội dung theo dự án. Có thể chia các đoạn thành cảnh, chọn tư liệu và dựng bằng storyboard; Ảnh có thể tạo riêng bằng nút AI cho từng cảnh; chưa tự tạo toàn bộ tư liệu cho cả kịch bản.
+
+## Đợt 30 chức năng v0.8
+
+Thêm **16 tùy chỉnh khi dựng**: sáng/tương phản/bão hòa, lật ngang/dọc, xoay, vignette, sharpen, màu viền, fps, chất lượng, mono, điểm nhạc, trễ/tốc độ và chuẩn hóa giọng. **4 công cụ media** tạo thumbnail/sóng âm, lưu khung hình và tách audio vào thư viện. **6 công cụ SRT** xử lý định dạng/lời trùng, phân tích tốc độ đọc, xuất TXT, tách câu và cắt theo thời lượng. **4 tiện ích job** lọc, sắp xếp, tải recipe JSON và audio MP3 của bản xuất.
+
+Danh sách đủ 30 mục, hướng dẫn và giới hạn: [BATCH-V08.md](docs/BATCH-V08.md). Không cần API key, không thay media gốc hoặc schema database. Các hiệu chỉnh được áp dụng khi render; preview nguồn giữ nguyên.
 
 ## Đợt 30 chức năng v0.7
 
@@ -85,7 +91,7 @@ Editor SRT không cần key. AI cần tài khoản có quyền dùng model; đã
 - Ghép: ảnh 5 giây/cảnh; video giữ thời lượng nguồn trong giới hạn; đầu ra dừng ở thời lượng media hoặc giới hạn người dùng, tùy giá trị nhỏ hơn.
 - Cắt clip: nhập điểm vào/ra theo giây trong danh sách cảnh; để trống điểm ra để lấy đến cuối nguồn. Loop lặp phần đã cắt. Điểm vượt thời lượng nguồn sẽ khiến job báo lỗi.
 - Loop: chọn đúng một ảnh/video, lặp trực tiếp đến thời lượng đích; không bảo đảm điểm nối liền mạch.
-- Đầu ra: H.264/AAC MP4, 30 fps; 720×1280/1280×720 hoặc 1080×1920/1920×1080; chọn contain (letterbox) hoặc cover (cắt giữa).
+- Đầu ra: H.264/AAC MP4, chọn 24/30/60 fps (mặc định 30); 720×1280/1280×720 hoặc 1080×1920/1920×1080; chọn contain (letterbox) hoặc cover (cắt giữa).
 - Audio gốc của clip bị bỏ. Giọng đọc có thể là file audio đã nhập hoặc MP3 tạo bằng TTS. Giọng mặc định 100%, nhạc mặc định 18%, chỉnh được 0–200%; limiter 0,95, tùy chọn hạ nhạc bằng sidechain khi có giọng. Có fade đầu/cuối toàn video/audio 0–2 giây.
 - SRT phải là UTF-8. Phụ đề được burn-in và có thể tải SRT sau render mới từ v0.6; sửa nội dung/mốc thời gian ở màn hình Giọng đọc & phụ đề.
 - Tối đa 250 MB/file, 30 cảnh/job, 600 giây; một worker render tuần tự.

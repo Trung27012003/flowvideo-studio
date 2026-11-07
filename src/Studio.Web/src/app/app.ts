@@ -1,4 +1,5 @@
-import { transformSrt, webVtt } from './creator-utils';
+import { RenderOptions, defaultEffects } from './render-options';
+import { transformSrt, webVtt, subtitleAnalysis, subtitlePlainText } from './creator-utils';
 import {
   Component,
   OnDestroy,
@@ -25,10 +26,11 @@ interface Job {
   message: string;
   createdAt: string;
   hasSubtitles: boolean;
+  hasAudio: boolean;
 }
 @Component({
   selector: 'app-root',
-  imports: [FormsModule, StoryboardEditor],
+  imports: [FormsModule, StoryboardEditor, RenderOptions],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -84,6 +86,26 @@ export class App implements OnInit, OnDestroy {
   mergeGap = 0.2;
   boardFit = signal('contain');
   boardFade = signal(0);
+  effects = signal(defaultEffects());
+  boardEffects = signal(defaultEffects());
+  jobFilter = signal('all');
+  jobSort = signal('newest');
+  filteredJobs = computed(() =>
+    this.jobs()
+      .filter((j) => this.jobFilter() === 'all' || j.status === this.jobFilter())
+      .slice()
+      .sort((a, b) =>
+        this.jobSort() === 'newest'
+          ? b.createdAt.localeCompare(a.createdAt)
+          : a.createdAt.localeCompare(b.createdAt),
+      ),
+  );
+  frameAt = 0;
+  derivedPreview = signal('');
+  private derivedUrl = '';
+  subtitleSplit = 80;
+  subtitleClamp = 30;
+  subtitleReport = signal('');
   boardDuck = signal(false);
   fit = 'contain';
   fadeSeconds = 0;
@@ -190,6 +212,7 @@ export class App implements OnInit, OnDestroy {
     this.destroyed = true;
     clearTimeout(this.timer);
     this.controller.abort();
+    this.clearDerived();
   }
   async api(path: string, init?: RequestInit): Promise<any> {
     const r = await fetch('/api' + path, {
@@ -235,6 +258,10 @@ export class App implements OnInit, OnDestroy {
     this.boardFit.set('contain');
     this.boardFade.set(0);
     this.boardDuck.set(false);
+    this.effects.set(defaultEffects());
+    this.boardEffects.set(defaultEffects());
+    this.clearDerived();
+    this.subtitleReport.set('');
     this.fit = 'contain';
     this.fadeSeconds = 0;
     this.duckMusic = false;
@@ -290,6 +317,7 @@ export class App implements OnInit, OnDestroy {
         this.boardFit.set(doc.fit ?? 'contain');
         this.boardFade.set(doc.fadeSeconds ?? 0);
         this.boardDuck.set(doc.duckMusic ?? false);
+        this.boardEffects.set({ ...defaultEffects(), ...doc.effects });
         this.boardResolution.set(doc.resolution ?? 720);
         this.boardVoiceGain.set(doc.voiceGain ?? 1);
         this.boardMusicGain.set(doc.musicGain ?? 0.18);
@@ -399,6 +427,7 @@ export class App implements OnInit, OnDestroy {
           fit: this.fit,
           fadeSeconds: this.fadeSeconds,
           duckMusic: this.duckMusic,
+          effects: this.effects(),
           resolution: this.resolution,
           voiceGain: this.voiceVolume / 100,
           musicGain: this.musicVolume / 100,
@@ -516,6 +545,7 @@ export class App implements OnInit, OnDestroy {
           fit: this.boardFit(),
           fadeSeconds: this.boardFade(),
           duckMusic: this.boardDuck(),
+          effects: this.boardEffects(),
           resolution: this.boardResolution(),
           voiceGain: this.boardVoiceGain(),
           musicGain: this.boardMusicGain(),
@@ -581,6 +611,8 @@ export class App implements OnInit, OnDestroy {
   async openAsset(asset: Asset) {
     this.assetPreview.set(asset);
     this.metadata.set(null);
+    this.clearDerived();
+    this.frameAt = 0;
     this.renameAssetText = asset.name;
     this.previewError.set('');
     this.previewText.set('Đang tải…');
@@ -745,6 +777,17 @@ export class App implements OnInit, OnDestroy {
     this.error.set('');
     this.notice.set('');
     try {
+      if (action === 'report') {
+        this.subtitleReport.set(subtitleAnalysis(this.subtitleContent));
+        return;
+      }
+      if (action === 'text') {
+        this.downloadBlob(
+          new Blob([subtitlePlainText(this.subtitleContent)], { type: 'text/plain;charset=utf-8' }),
+          'flowvideo-subtitles.txt',
+        );
+        return;
+      }
       if (action === 'vtt')
         this.downloadBlob(
           new Blob([webVtt(this.subtitleContent)], { type: 'text/vtt;charset=utf-8' }),
@@ -758,7 +801,11 @@ export class App implements OnInit, OnDestroy {
               ? this.subtitleSpeed
               : action === 'wrap'
                 ? this.wrapLength
-                : this.mergeGap;
+                : action === 'split'
+                  ? this.subtitleSplit
+                  : action === 'clamp'
+                    ? this.subtitleClamp
+                    : this.mergeGap;
         this.subtitleContent = transformSrt(
           this.subtitleContent,
           action,
@@ -771,6 +818,44 @@ export class App implements OnInit, OnDestroy {
     } catch (e) {
       this.error.set(e instanceof Error ? e.message : 'Không xử lý được SRT.');
     }
+  }
+  clearDerived() {
+    if (this.derivedUrl) URL.revokeObjectURL(this.derivedUrl);
+    this.derivedUrl = '';
+    this.derivedPreview.set('');
+  }
+  async mediaTool(action: string) {
+    const asset = this.assetPreview();
+    if (!asset) return;
+    await this.perform(async () => {
+      if (action === 'frame' || action === 'extract-audio') {
+        const derived = await this.api('/assets/' + asset.id + '/' + action, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: action === 'frame' ? JSON.stringify({ at: this.frameAt }) : undefined,
+        });
+        this.addAsset(derived);
+        this.notice.set('Đã thêm ' + derived.name + ' vào thư viện.');
+      } else {
+        const response = await fetch(
+          '/api/assets/' +
+            asset.id +
+            '/' +
+            action +
+            (action === 'thumbnail' ? '?at=' + this.frameAt : ''),
+          { signal: AbortSignal.any([this.controller.signal, AbortSignal.timeout(70000)]) },
+        );
+        if (!response.ok) {
+          const result = await response.json().catch(() => ({}));
+          throw new Error(result.error || result.detail || 'Không tạo được ảnh xem trước.');
+        }
+        const blob = await response.blob();
+        if (this.assetPreview()?.id !== asset.id) return;
+        this.clearDerived();
+        this.derivedUrl = URL.createObjectURL(blob);
+        this.derivedPreview.set(this.derivedUrl);
+      }
+    });
   }
   async generateScript() {
     await this.perform(async () => {

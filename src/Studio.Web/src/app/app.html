@@ -68,7 +68,7 @@
         ></span
       >
       <div class="header-right">
-        <span class="pill">MVP v0.7</span
+        <span class="pill">MVP v0.8</span
         ><select
           aria-label="Chọn dự án"
           [ngModel]="projectId()"
@@ -156,6 +156,7 @@
         } @else {
           <div class="studio-grid">
             <section class="panel settings">
+              <app-render-options [(options)]="effects" [disabled]="busy()" />
               <div class="panel-title">
                 <h2>Thiết lập video</h2>
                 <span>01</span>
@@ -327,7 +328,28 @@
               <h2>Hàng đợi render</h2>
               <span>100 tác vụ gần nhất · tự cập nhật</span>
             </div>
-            @for (j of jobs(); track j.id) {
+            <div class="library-tools">
+              <label
+                >Lọc trạng thái render<select
+                  [ngModel]="jobFilter()"
+                  (ngModelChange)="jobFilter.set($event)"
+                >
+                  <option value="all">Tất cả</option>
+                  @for (
+                    statusName of ['Queued', 'Running', 'Succeeded', 'Failed', 'Cancelled'];
+                    track statusName
+                  ) {
+                    <option [value]="statusName">{{ status(statusName) }}</option>
+                  }
+                </select></label
+              ><label
+                >Sắp xếp render<select [ngModel]="jobSort()" (ngModelChange)="jobSort.set($event)">
+                  <option value="newest">Mới trước</option>
+                  <option value="oldest">Cũ trước</option>
+                </select></label
+              ><span>{{ filteredJobs().length }} / {{ jobs().length }} tác vụ</span>
+            </div>
+            @for (j of filteredJobs(); track j.id) {
               <div class="job">
                 <span
                   class="status"
@@ -339,7 +361,11 @@
                   <b>Video · {{ j.id.slice(0, 8) }}</b
                   ><small>{{ j.message }}</small>
                 </div>
+                <a class="download" [href]="'/api/jobs/' + j.id + '/recipe'">Cấu hình JSON ↓</a>
                 @if (j.status === 'Succeeded') {
+                  @if (j.hasAudio) {
+                    <a class="download" [href]="'/api/jobs/' + j.id + '/audio'">Tải audio MP3 ↓</a>
+                  }
                   <button
                     class="secondary"
                     (click)="preview.set('/api/jobs/' + j.id + '/download')"
@@ -540,6 +566,7 @@
         @if (projectId() && documentLoaded()) {
           <app-storyboard
             [(scenes)]="scenes"
+            [(effects)]="boardEffects"
             [(fit)]="boardFit"
             [(fadeSeconds)]="boardFade"
             [(duckMusic)]="boardDuck"
@@ -691,6 +718,40 @@
             <details class="batch-tools" open>
               <summary>Công cụ phụ đề hàng loạt</summary>
               <div class="subtitle-toolbar">
+                <button (click)="subtitleTool('strip')" [disabled]="busy()">
+                  Xóa định dạng SRT
+                </button>
+                <button (click)="subtitleTool('dedupe')" [disabled]="busy()">
+                  Gộp lời trùng liên tiếp
+                </button>
+                <button (click)="subtitleTool('report')" [disabled]="busy()">
+                  Phân tích tốc độ đọc SRT
+                </button>
+                <button (click)="subtitleTool('text')" [disabled]="busy()">Xuất lời SRT TXT</button>
+                <label
+                  >Ký tự mỗi câu khi tách<input
+                    type="number"
+                    min="20"
+                    max="200"
+                    [(ngModel)]="subtitleSplit" /></label
+                ><button (click)="subtitleTool('split')" [disabled]="busy()">
+                  Tách câu SRT dài
+                </button>
+                <label
+                  >Giới hạn SRT (giây)<input
+                    type="number"
+                    min="0.1"
+                    max="600"
+                    step="0.1"
+                    [(ngModel)]="subtitleClamp" /></label
+                ><button (click)="subtitleTool('clamp')" [disabled]="busy()">
+                  Cắt SRT theo thời lượng
+                </button>
+              </div>
+              @if (subtitleReport()) {
+                <pre class="subtitle-report" role="status">{{ subtitleReport() }}</pre>
+              }
+              <div class="subtitle-toolbar">
                 <label
                   >Độ lệch SRT (s)<input
                     type="number"
@@ -775,13 +836,13 @@
       }
       @if (tab() === 'roadmap') {
         <section class="panel roadmap">
-          <h2>Đã hoạt động trong v0.7</h2>
+          <h2>Đã hoạt động trong v0.8</h2>
           <p>
-            v0.7 bổ sung 30 công cụ: nhân bản dự án kèm media, ZIP/CSV/TXT/WebVTT, thông số file,
-            hoàn tác và chỉnh cảnh/phụ đề hàng loạt, contain/cover, fade và hạ nhạc theo giọng. Quản
-            lý dự án và media, cắt điểm vào/ra từng clip, ghép ảnh/video, loop trực tiếp, audio từ
-            file, phụ đề SRT, hàng đợi lưu SQLite và tải MP4. Viết kịch bản, tạo giọng đọc và nhận
-            diện phụ đề AI khi có API key. Chỉnh sửa SRT không cần AI.
+            v0.8 thêm hiệu chỉnh hình/âm thanh, fps/chất lượng, công cụ lấy thumbnail, khung hình,
+            sóng âm, audio và xử lý SRT. Có lọc/sắp xếp job, tải cấu hình JSON và audio của bản
+            xuất. Quản lý dự án và media, cắt điểm vào/ra từng clip, ghép ảnh/video, loop trực tiếp,
+            audio từ file, phụ đề SRT, hàng đợi lưu SQLite và tải MP4. Viết kịch bản, tạo giọng đọc
+            và nhận diện phụ đề AI khi có API key. Chỉnh sửa SRT không cần AI.
           </p>
           <h2>Giai đoạn tiếp theo</h2>
           <p>1. Tự động tạo ảnh và giọng cho toàn storyboard.</p>
@@ -803,7 +864,7 @@
   aria-label="Xem trước tài nguyên"
   #mediaDialog
   class="media-dialog"
-  (close)="assetPreview.set(null)"
+  (close)="assetPreview.set(null); clearDerived()"
 >
   <div class="dialog-header">
     <h2>{{ assetPreview()?.name }}</h2>
@@ -826,6 +887,38 @@
     }
     @if (error()) {
       <p role="alert">{{ error() }}</p>
+    }
+    <div class="subtitle-toolbar">
+      @if (asset.kind === 'video' || asset.kind === 'image') {
+        <label
+          >Mốc lấy ảnh (s)<input
+            type="number"
+            min="0"
+            max="600"
+            step="0.1"
+            [(ngModel)]="frameAt" /></label
+        ><button (click)="mediaTool('thumbnail')" [disabled]="busy()">Tạo thumbnail PNG</button>
+      }
+      @if (asset.kind === 'video') {
+        <button (click)="mediaTool('frame')" [disabled]="busy()">Lưu khung hình vào thư viện</button
+        ><button (click)="mediaTool('extract-audio')" [disabled]="busy()">
+          Tách audio vào thư viện
+        </button>
+      }
+      @if (asset.kind === 'video' || asset.kind === 'audio') {
+        <button (click)="mediaTool('waveform')" [disabled]="busy()">Xem sóng âm</button>
+      }
+    </div>
+    @if (derivedPreview()) {
+      <img [src]="derivedPreview()" alt="Kết quả công cụ media" /><a
+        class="download"
+        [href]="derivedPreview()"
+        download="flowvideo-media.png"
+        >Tải ảnh công cụ ↓</a
+      >
+    }
+    @if (notice()) {
+      <p role="status">{{ notice() }}</p>
     }
     @if (previewError()) {
       <p role="alert">{{ previewError() }}</p>

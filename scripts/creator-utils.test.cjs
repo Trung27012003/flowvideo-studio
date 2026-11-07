@@ -70,3 +70,92 @@ test("parser handles BOM/CRLF and rejects unordered, malformed or excessive text
   ])
     assert.throws(() => parseSrt(input));
 });
+
+test("format cleanup strips HTML/ASS while preserving Vietnamese and rejects an empty cue", () => {
+  const input = writeSrt([
+    { start: 0, end: 1000, text: "{\\an8}<b>Xin chào</b> <i>bạn</i>" },
+  ]);
+  assert.equal(
+    parseSrt(transformSrt(input, "strip", 0))[0].text,
+    "Xin chào bạn",
+  );
+  assert.throws(() =>
+    transformSrt(
+      writeSrt([{ start: 0, end: 1000, text: "<b></b>" }]),
+      "strip",
+      0,
+    ),
+  );
+});
+test("duplicate cue merge handles overlap, gap threshold and duration limit", () => {
+  const input = writeSrt([
+    { start: 0, end: 1000, text: "Xin chào" },
+    { start: 900, end: 2000, text: "Xin  chào" },
+    { start: 3000, end: 4000, text: "Xin chào" },
+    { start: 4000, end: 15000, text: "Xin chào" },
+  ]);
+  const result = parseSrt(transformSrt(input, "dedupe", 0));
+  assert.equal(result.length, 3);
+  assert.equal(result[0].end, 2000);
+});
+test("long cue splitting retains all characters and partitions its original time", () => {
+  const text = "Xin chào bạn từ FlowVideo " + "ắ".repeat(45);
+  const result = parseSrt(
+    transformSrt(writeSrt([{ start: 1000, end: 5000, text }]), "split", 20),
+  );
+  assert(result.length > 1);
+  assert.equal(result[0].start, 1000);
+  assert.equal(result.at(-1).end, 5000);
+  assert.equal(
+    result
+      .map((c) => c.text)
+      .join("")
+      .replace(/\s/g, ""),
+    text.replace(/\s/g, ""),
+  );
+  assert(
+    result.every(
+      (c, i) =>
+        Array.from(c.text).length <= 20 &&
+        (i === 0 || result[i - 1].end === c.start),
+    ),
+  );
+  assert.throws(() =>
+    transformSrt(writeSrt([{ start: 0, end: 1, text }]), "split", 20),
+  );
+  const formatted = parseSrt(
+    transformSrt(
+      writeSrt([{ start: 0, end: 5000, text: "<b>" + text + "</b>" }]),
+      "split",
+      20,
+    ),
+  );
+  assert(formatted.every((c) => !/[<>]/.test(c.text)));
+  assert.equal(
+    formatted
+      .map((c) => c.text)
+      .join("")
+      .replace(/\s/g, ""),
+    text.replace(/\s/g, ""),
+  );
+});
+test("clamp trims the last cue and drops later cues without changing source on invalid results", () => {
+  const result = parseSrt(transformSrt(source, "clamp", 1.5));
+  assert.equal(result.length, 1);
+  assert.equal(result[0].end, 1500);
+  assert.throws(() => transformSrt(source, "clamp", 0.5));
+});
+test("reading report spots rapid and overlapping cues; text export omits formatting", () => {
+  const {
+    subtitleAnalysis,
+    subtitlePlainText,
+  } = require("../src/Studio.Web/src/app/creator-utils.ts");
+  const input = writeSrt([
+    { start: 0, end: 100, text: "<b>Xin chào mọi người</b>" },
+    { start: 50, end: 1000, text: "FlowVideo" },
+  ]);
+  const report = subtitleAnalysis(input);
+  assert(report.includes("1 câu chồng lấn"));
+  assert(report.includes("1 câu vượt 20"));
+  assert.equal(subtitlePlainText(input), "Xin chào mọi người\n\nFlowVideo\n");
+});

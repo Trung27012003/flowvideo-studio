@@ -871,6 +871,226 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     console.log(
       "PASS v0.7 browser: rename, history, bulk scene tools, split, text/CSV/ZIP/VTT downloads, metadata, media rename, independent project clone, fit/fade/duck persistence, SRT transformations",
     );
+    // v0.8 production tools: real media derivatives, all effect settings and render exports.
+    await page
+      .getByRole("button", { name: "Thư viện media", exact: true })
+      .click();
+    const mux = path.join(temp, "v08-source.mp4");
+    execFileSync("ffmpeg", [
+      "-y",
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-i",
+      clip,
+      "-i",
+      tone,
+      "-c:v",
+      "copy",
+      "-c:a",
+      "aac",
+      "-shortest",
+      mux,
+    ]);
+    await page.waitForFunction(
+      () => !document.querySelector("input[type=file][multiple]")?.disabled,
+    );
+    await page.locator("input[type=file][multiple]").setInputFiles(mux);
+    await page
+      .getByRole("button", { name: "Xem trước v08-source.mp4", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", { name: "Xem trước tài nguyên" });
+    await dialog.getByLabel("Mốc lấy ảnh (s)", { exact: true }).fill("0.25");
+    await dialog
+      .getByRole("button", { name: "Tạo thumbnail PNG", exact: true })
+      .click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector('img[alt="Kết quả công cụ media"]')
+          ?.naturalWidth > 0,
+    );
+    const thumbnailDownload = page.waitForEvent("download");
+    await dialog
+      .getByRole("link", { name: "Tải ảnh công cụ ↓", exact: true })
+      .click();
+    assert((await thumbnailDownload).suggestedFilename().endsWith(".png"));
+    await dialog
+      .getByRole("button", { name: "Xem sóng âm", exact: true })
+      .click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector('img[alt="Kết quả công cụ media"]')
+          ?.naturalWidth === 1000,
+    );
+    await dialog
+      .getByRole("button", { name: "Lưu khung hình vào thư viện", exact: true })
+      .click();
+    await dialog
+      .getByRole("status")
+      .filter({ hasText: "vào thư viện" })
+      .waitFor();
+    await dialog
+      .getByRole("button", { name: "Tách audio vào thư viện", exact: true })
+      .click();
+    await dialog
+      .getByRole("status")
+      .filter({ hasText: "audio.mp3 vào thư viện" })
+      .waitFor();
+    await dialog
+      .getByRole("button", { name: "Đóng xem trước tài nguyên", exact: true })
+      .click();
+    await page.getByRole("button", { name: "Storyboard", exact: true }).click();
+    await board.locator("app-render-options summary").click();
+    for (const [label, value] of [
+      ["Độ sáng", "0.15"],
+      ["Tương phản", "1.1"],
+      ["Độ bão hòa", "0.8"],
+      ["Độ sắc nét", "0.3"],
+      ["Điểm bắt đầu nhạc (s)", "0.1"],
+      ["Trễ giọng (s)", "0.2"],
+      ["Tốc độ giọng", "1.25"],
+    ])
+      await board
+        .getByLabel(label + " · Storyboard", { exact: true })
+        .fill(value);
+    for (const label of [
+      "Lật ngang",
+      "Lật dọc",
+      "Tối góc vignette",
+      "Xuất âm thanh mono",
+      "Chuẩn hóa độ lớn giọng",
+    ])
+      await board.getByLabel(label + " · Storyboard", { exact: true }).check();
+    await board
+      .getByLabel("Xoay hình · Storyboard", { exact: true })
+      .selectOption({ label: "90°" });
+    await board
+      .getByLabel("FPS · Storyboard", { exact: true })
+      .selectOption({ label: "24 fps" });
+    await board
+      .getByLabel("Chất lượng · Storyboard", { exact: true })
+      .selectOption("compact");
+    await board
+      .getByLabel("Màu viền · Storyboard", { exact: true })
+      .evaluate((el) => {
+        el.value = "#112233";
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    const v08Assets = await (
+      await page.request.get(
+        "http://127.0.0.1:5099/api/projects/" + clonedProject + "/assets",
+      )
+    ).json();
+    const v08Audio = v08Assets.find((a) => a.name === "v08-source · audio.mp3");
+    assert(v08Audio);
+    await board.getByLabel("Giọng cho storyboard").selectOption(v08Audio.id);
+    await board.getByLabel("Nhạc cho storyboard").selectOption(v08Audio.id);
+    await board
+      .getByRole("button", { name: "Lưu & dựng storyboard", exact: true })
+      .click();
+    await page
+      .getByRole("heading", { name: "Hàng đợi render", exact: true })
+      .waitFor();
+    await page
+      .getByRole("link", { name: "Tải MP4 ↓", exact: true })
+      .waitFor({ timeout: 120000 });
+    await page.getByLabel("Lọc trạng thái render").selectOption("Failed");
+    await page.waitForFunction(
+      () => document.querySelectorAll(".queue .job").length === 0,
+    );
+    await page.getByLabel("Lọc trạng thái render").selectOption("Succeeded");
+    await page.getByLabel("Sắp xếp render").selectOption("oldest");
+    await page
+      .getByRole("link", { name: "Cấu hình JSON ↓", exact: true })
+      .waitFor();
+    const recipeDownload = page.waitForEvent("download");
+    await page
+      .getByRole("link", { name: "Cấu hình JSON ↓", exact: true })
+      .click();
+    const recipeFile = await recipeDownload;
+    const recipe = JSON.parse(
+      await fs.readFile(await recipeFile.path(), "utf8"),
+    );
+    assert.equal(recipe.request.effects.brightness, 0.15);
+    assert.equal(recipe.request.effects.rotation, 90);
+    assert.equal(recipe.request.effects.fps, 24);
+    assert.equal(recipe.request.effects.background, "#112233");
+    assert.equal(recipe.request.effects.normalizeVoice, true);
+    assert.equal(recipe.request.effects.mono, true);
+    const audioDownload = page.waitForEvent("download");
+    await page
+      .getByRole("link", { name: "Tải audio MP3 ↓", exact: true })
+      .click();
+    assert((await audioDownload).suggestedFilename().endsWith(".mp3"));
+    await page
+      .getByRole("button", { name: "Giọng đọc & phụ đề", exact: true })
+      .click();
+    await page
+      .getByLabel("Nội dung SRT", { exact: true })
+      .fill(
+        "1\n00:00:00,000 --> 00:00:01,000\n<b>Xin chào</b>\n\n2\n00:00:01,050 --> 00:00:02,000\n<b>Xin chào</b>",
+      );
+    await page
+      .getByRole("button", { name: "Xóa định dạng SRT", exact: true })
+      .click();
+    await page.waitForFunction(
+      () => !document.querySelector(".srt-content").value.includes("<b>"),
+    );
+    await page
+      .getByRole("button", { name: "Gộp lời trùng liên tiếp", exact: true })
+      .click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector(".srt-content").value.trim().split(" --> ")
+          .length === 2,
+    );
+    await page
+      .getByRole("button", { name: "Phân tích tốc độ đọc SRT", exact: true })
+      .click();
+    await page
+      .locator(".subtitle-report")
+      .filter({ hasText: "1 câu" })
+      .waitFor();
+    const textDownload = page.waitForEvent("download");
+    await page
+      .getByRole("button", { name: "Xuất lời SRT TXT", exact: true })
+      .click();
+    const textFile = await textDownload;
+    assert(
+      (await fs.readFile(await textFile.path(), "utf8")).includes("Xin chào"),
+    );
+    await page
+      .getByLabel("Nội dung SRT", { exact: true })
+      .fill(
+        "1\n00:00:00,000 --> 00:00:04,000\nXin chào bạn đến với FlowVideo Studio để cùng sáng tạo nội dung video",
+      );
+    await page.getByLabel("Ký tự mỗi câu khi tách", { exact: true }).fill("20");
+    await page
+      .getByRole("button", { name: "Tách câu SRT dài", exact: true })
+      .click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector(".srt-content").value.trim().split(" --> ")
+          .length > 2,
+    );
+    await page.getByLabel("Giới hạn SRT (giây)", { exact: true }).fill("1.5");
+    await page
+      .getByRole("button", { name: "Cắt SRT theo thời lượng", exact: true })
+      .click();
+    await page.waitForFunction(() =>
+      document.querySelector(".srt-content").value.includes("00:00:01,500"),
+    );
+    await page.getByRole("button", { name: "Storyboard", exact: true }).click();
+    await board.locator("app-render-options summary").click();
+    assert.equal(
+      await board
+        .getByLabel("FPS · Storyboard", { exact: true })
+        .evaluate((el) => el.selectedOptions[0].textContent.trim()),
+      "24 fps",
+    );
+    console.log(
+      "PASS v0.8 browser: 16 persisted effects, thumbnail/waveform/frame/extract audio, 6 subtitle tools, queue filters/sort, recipe JSON and rendered MP3 download",
+    );
     await page.evaluate(() => scrollTo(0, 0));
     await page.screenshot({
       path: path.join(root, "test-results/imported.png"),

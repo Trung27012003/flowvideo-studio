@@ -34,7 +34,8 @@ public record StoryDocument(
     double MusicGain = .18,
     string Fit = "contain",
     double FadeSeconds = 0,
-    bool DuckMusic = false
+    bool DuckMusic = false,
+    RenderEffects? Effects = null
 );
 
 public record SaveDocument(int Version, StoryDocument Document);
@@ -168,7 +169,8 @@ public static class Storyboard
                     MusicGain: document.MusicGain,
                     Fit: document.Fit,
                     FadeSeconds: document.FadeSeconds,
-                    DuckMusic: document.DuckMusic
+                    DuckMusic: document.DuckMusic,
+                    Effects: document.Effects
                 );
                 var job = new RenderJob
                 {
@@ -206,6 +208,8 @@ public static class Storyboard
         CancellationToken ct
     )
     {
+        if (doc.Effects is not null && !doc.Effects.Valid())
+            return "Thông số hiệu chỉnh video/audio không hợp lệ.";
         if (
             doc.Idea is null
             || doc.Idea.Length > 4000

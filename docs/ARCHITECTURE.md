@@ -1,4 +1,4 @@
-# Kiến trúc v0.7
+# Kiến trúc v0.8
 
 Angular → HTTP API ASP.NET Core → EF Core SQLite; BackgroundService đọc job queued và gọi FFmpeg. Browser polling theo tải: 2,5 giây khi active, 15 giây khi idle, 30 giây khi lỗi; không gửi khi tab ẩn. Mỗi vòng đợi request hoàn tất trước khi hẹn lần sau; version guard tránh phản hồi cũ ghi đè dự án mới. File dùng ID sinh bởi server, không dùng tên upload làm đường dẫn. FFmpeg arguments được truyền bằng ArgumentList, không qua shell.
 
@@ -72,3 +72,14 @@ WorkspaceTools cung cấp rename, ffprobe metadata (timeout 15 giây), clone có
 Fit/FadeSeconds/DuckMusic là trường JSON optional (contain/0/false), không migration. Normalize chọn scale/pad hoặc scale/crop. Fade tạo vf/af cuối toàn bản xuất; chỉ re-encode video nếu có caption hoặc fade. Duck dùng voice sau gain tách nhánh điều khiển sidechaincompress, mix rồi limiter và fade.
 
 StoryboardEditor có snapshot undo/redo tối đa 20 bước cho scenes, không phục hồi cấu hình, backend version hoặc AI journal. Đổi tab kết thúc lịch sử. creator-utils.ts chứa phân bổ thời lượng bước 0,1 giây, parser/transform SRT/WebVTT thuần để test bằng Node 24. Transform xác thực kết quả trước cập nhật draft. Export text lưu document trước lấy nội dung; import JSON tiếp tục bỏ media references, clone copy media độc lập.
+
+
+## Production tools v0.8
+
+RenderEffects là record JSON optional trong StoryDocument/RenderRequest, có validator chung tại cả intake document và Studio render. Record tạo filter chỉ từ số hữu hạn, enum và màu hex đã xác thực; không nhận biểu thức FFmpeg tùy ý. Normalize áp dụng xoay/lật/eq/scale/pad/fps/unsharp/vignette, CRF theo profile. Voice dùng atempo, loudnorm tùy chọn, gain, adelay rồi apad; nhánh duck lấy tín hiệu đã hiệu chỉnh. Audio chuẩn hóa xuất 48 kHz; mono sau mixer, trước limiter. JSON cũ null Effects dùng default.
+
+MediaTools chạy công cụ đồng bộ theo request, semaphore hai tác vụ/instance, timeout 60 giây, nguồn audio/video tối đa 600 giây. Đầu ra trong temp/media-GUID; thumbnail/waveform trả byte PNG, audio bản xuất trả MP3. Lưu frame/extract audio copy thành Asset GUID mới, cleanup nếu commit DB thất bại. Không có browser automation hay dịch vụ AI trong luồng này.
+
+GET recipe xuất DTO request snapshot và ID/trạng thái, không trả đường dẫn file vật lý. Jobs thêm hasAudio từ VoiceId/MusicId của request; frontend chỉ hiện link MP3 cho job hoàn tất có flag. Job filter/sort dùng computed signals của danh sách 100 job, không ảnh hưởng FIFO/polling.
+
+RenderOptions là Angular component dùng lại giữa Studio/Storyboard, model Effects và defaults chung. Creator-utils thêm các phép biến đổi SRT thuần, kiểm tra toàn kết quả trước cập nhật draft, xuất TXT và báo cáo CPS/chồng lấn. Mọi media derivative và export được kiểm tra bằng FFmpeg thật, upstream AI trong bộ cũ vẫn dùng fake provider.

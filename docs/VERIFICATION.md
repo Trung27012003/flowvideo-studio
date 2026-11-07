@@ -1,4 +1,4 @@
-# Kiểm chứng bản v0.7
+# Kiểm chứng bản v0.8
 
 Đã chạy trong môi trường Linux với .NET SDK 10.0.403, Node.js 24 và FFmpeg:
 
@@ -40,7 +40,7 @@ Phép đo trước/sau và giới hạn diễn giải xem tại [PERFORMANCE.md]
 - Startup đánh dấu Running Unknown, chỉ tiếp tục Queued. Kiểm tra thiếu key, phiên bản cũ, prompt rỗng và dọn file.
 - Browser dùng capability/image job API mô phỏng để kiểm tra queued/succeeded, chọn ảnh vào cảnh và dựng thật. Không có API key thật hoặc yêu cầu tính phí trong test.
 
-Tổng bộ integration tests hiện có 47 trường hợp. Chưa kiểm chứng chất lượng ảnh/quyền model/độ trễ thực tế bằng tài khoản OpenAI của người dùng.
+Tổng bộ integration tests hiện có 53 trường hợp. Chưa kiểm chứng chất lượng ảnh/quyền model/độ trễ thực tế bằng tài khoản OpenAI của người dùng.
 
 ## Đợt 10 chức năng
 
@@ -63,3 +63,13 @@ Tổng bộ integration tests hiện có 47 trường hợp. Chưa kiểm chứn
 - Browser: rename dự án/media, undo/redo, split, thời lượng hàng loạt, lời/đánh số/thứ tự, tải TXT/CSV/ZIP/VTT, metadata, điền media, clone có file, lưu fit/fade/duck, xử lý SRT và layout mobile.
 
 Lệnh mới: `npm run test:tools` trong `src/Studio.Web`. CI chạy cùng build, integration tests, media smoke, browser smoke và đóng gói artifact.
+
+
+## Đợt 30 chức năng v0.8
+
+- Sáu integration tests bổ sung đưa tổng .NET lên 53: chặn 12 nhóm cấu hình sai ở cả hai intake; save/export/import/clone Effects; PNG thumbnail/waveform thật, MP3/frame độc lập; nguồn thiếu audio/mốc sai/sai loại và cleanup; render tất cả hiệu chỉnh, fps/mono/48 kHz, recipe và audio export; silent job và music offset vượt nguồn.
+- Node tổng 12 test: thêm strip HTML/ASS, gộp trùng/chồng lấn theo giới hạn, split giữ chữ và phân hoạch thời gian, clamp và report/TXT.
+- Media smoke: decode pixel grayscale/brightness/contrast, viền magenta, rotate+flip/sharpen/vignette; ffprobe 24/60 fps và mono; đo RMS các đoạn im lặng/trễ/voice tăng tốc và loudnorm.
+- Browser: cấu hình đủ 16 option, lưu/snapshot render, tạo/tải thumbnail và waveform, trích frame/audio vào thư viện, 6 công cụ SRT, job filter/sort, tải recipe/MP3 và layout desktop/mobile.
+
+Các test không gửi request trả phí. Sinh video AI chưa được triển khai hoặc kiểm chứng trong đợt này.

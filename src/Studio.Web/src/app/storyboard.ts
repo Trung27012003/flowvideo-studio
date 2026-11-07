@@ -1,3 +1,4 @@
+import { RenderOptions, defaultEffects } from './render-options';
 import { scaleDurations } from './creator-utils';
 import { Component, computed, input, model, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -25,7 +26,7 @@ export interface SceneDraft {
 }
 @Component({
   selector: 'app-storyboard',
-  imports: [FormsModule],
+  imports: [FormsModule, RenderOptions],
   templateUrl: './storyboard.html',
   styleUrl: './storyboard.scss',
 })
@@ -38,6 +39,7 @@ export class StoryboardEditor {
   resolution = model(720);
   voiceGain = model(1);
   musicGain = model(0.18);
+  effects = model(defaultEffects());
   fit = model('contain');
   fadeSeconds = model(0);
   duckMusic = model(false);

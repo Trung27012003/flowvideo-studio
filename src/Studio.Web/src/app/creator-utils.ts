@@ -138,6 +138,62 @@ export function transformSrt(
       } else merged.push({ ...c });
     }
     cues = merged;
+  } else if (action === 'strip') {
+    cues = cues.map((c) => ({ ...c, text: stripFormatting(c.text) }));
+  } else if (action === 'dedupe') {
+    const result: Cue[] = [];
+    for (const cue of cues) {
+      const previous = result.at(-1);
+      if (
+        previous &&
+        previous.text.replace(/\s+/g, ' ').trim() === cue.text.replace(/\s+/g, ' ').trim() &&
+        cue.start <= previous.end + 250 &&
+        Math.max(cue.end, previous.end) - previous.start <= 10000
+      )
+        previous.end = Math.max(previous.end, cue.end);
+      else result.push({ ...cue });
+    }
+    cues = result;
+  } else if (action === 'clamp') {
+    if (!Number.isFinite(amount) || amount < 0.1 || amount > 600)
+      throw new Error('Giới hạn từ 0,1 đến 600 giây.');
+    cues = cues
+      .filter((c) => c.start < amount * 1000)
+      .map((c) => ({ ...c, end: Math.min(c.end, Math.round(amount * 1000)) }));
+    if (!cues.length)
+      throw new Error('Không còn câu nào trong khoảng đã chọn. Bản nháp được giữ nguyên.');
+  } else if (action === 'split') {
+    if (!Number.isInteger(amount) || amount < 20 || amount > 200)
+      throw new Error('Tách theo 20–200 ký tự mỗi câu.');
+    cues = cues.flatMap((c) => {
+      const parts: string[] = [];
+      let part = '';
+      const plain = stripFormatting(c.text);
+      if (!plain) throw new Error('Câu không còn lời sau khi bỏ định dạng.');
+      for (const word of plain.split(/\s+/)) {
+        const chars = Array.from(word);
+        while (chars.length > amount) {
+          if (part) {
+            parts.push(part);
+            part = '';
+          }
+          parts.push(chars.splice(0, amount).join(''));
+        }
+        const rest = chars.join('');
+        if (!rest) continue;
+        if (Array.from(part + (part ? ' ' : '') + rest).length > amount) {
+          parts.push(part);
+          part = rest;
+        } else part += (part ? ' ' : '') + rest;
+      }
+      if (part) parts.push(part);
+      if (c.end - c.start < parts.length) throw new Error('Câu quá ngắn để chia mốc thời gian.');
+      return parts.map((text, i) => ({
+        start: c.start + Math.round(((c.end - c.start) * i) / parts.length),
+        end: c.start + Math.round(((c.end - c.start) * (i + 1)) / parts.length),
+        text,
+      }));
+    });
   } else throw new Error('Thao tác không hỗ trợ.');
   return writeSrt(cues);
 }
@@ -152,4 +208,34 @@ export function webVtt(content: string): string {
       .join('\n\n') +
     '\n'
   );
+}
+
+function stripFormatting(text: string): string {
+  return text
+    .replace(/<[^>]*>/g, '')
+    .replace(/\{\\[^}]*\}/g, '')
+    .trim();
+}
+export function subtitlePlainText(content: string): string {
+  return (
+    parseSrt(content)
+      .map((c) => stripFormatting(c.text))
+      .join('\n\n') + '\n'
+  );
+}
+export function subtitleAnalysis(content: string): string {
+  const cues = parseSrt(content);
+  let maxEnd = 0,
+    overlaps = 0;
+  const fast: number[] = [];
+  for (const [i, c] of cues.entries()) {
+    if (c.start < maxEnd) overlaps++;
+    maxEnd = Math.max(maxEnd, c.end);
+    if (
+      Array.from(stripFormatting(c.text).replace(/\s/g, '')).length / ((c.end - c.start) / 1000) >
+      20
+    )
+      fast.push(i + 1);
+  }
+  return `${cues.length} câu · kết thúc ${(maxEnd / 1000).toFixed(3)} giây\n${overlaps} câu chồng lấn · ${fast.length} câu vượt 20 ký tự/giây\n${fast.length ? 'Cần xem lại câu: ' + fast.slice(0, 20).join(', ') + (fast.length > 20 ? '…' : '') : 'Không phát hiện câu đọc nhanh theo ngưỡng 20 ký tự/giây.'}\nƯớc lượng theo ký tự không tính khoảng trắng; không đo tốc độ giọng thực tế.`;
 }
