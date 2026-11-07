@@ -1,4 +1,4 @@
-# Kiểm chứng bản v0.6
+# Kiểm chứng bản v0.7
 
 Đã chạy trong môi trường Linux với .NET SDK 10.0.403, Node.js 24 và FFmpeg:
 
@@ -40,7 +40,7 @@ Phép đo trước/sau và giới hạn diễn giải xem tại [PERFORMANCE.md]
 - Startup đánh dấu Running Unknown, chỉ tiếp tục Queued. Kiểm tra thiếu key, phiên bản cũ, prompt rỗng và dọn file.
 - Browser dùng capability/image job API mô phỏng để kiểm tra queued/succeeded, chọn ảnh vào cảnh và dựng thật. Không có API key thật hoặc yêu cầu tính phí trong test.
 
-Tổng bộ integration tests hiện có 38 trường hợp. Chưa kiểm chứng chất lượng ảnh/quyền model/độ trễ thực tế bằng tài khoản OpenAI của người dùng.
+Tổng bộ integration tests hiện có 47 trường hợp. Chưa kiểm chứng chất lượng ảnh/quyền model/độ trễ thực tế bằng tài khoản OpenAI của người dùng.
 
 ## Đợt 10 chức năng
 
@@ -49,3 +49,17 @@ Tổng bộ integration tests hiện có 38 trường hợp. Chưa kiểm chứn
 - Render 1920×1080 thật, xuất SRT hai cảnh đúng timeline và không hiện SRT ở job không có phụ đề.
 - Đo RMS PCM sau render voice-only, music-only và mix: gain 25% tạo mức tín hiệu khoảng 1/4 so với 100%.
 - Browser: tìm không dấu, lọc, preview video/audio/image/SRT, Escape/focus modal, clone ID riêng, preset, lưu gain, download JSON/import thành project mới, SRT download, kiểm tra responsive.
+
+
+## Đợt 30 chức năng v0.7
+
+- Rename project/media: cập nhật bền vững, giữ nguyên byte file, chặn đổi extension và ký tự đường dẫn/điều khiển.
+- Clone dự án: ID project/scene/media mới; remap voice/music; byte media độc lập khi file gốc mất; dữ liệu thiếu không tạo dự án dang dở; không gọi AI.
+- ZIP: chọn giới hạn, ID trùng/khác project, sanitize tên legacy chứa đường dẫn; giải nén so byte file gốc. CSV: quote tiếng Việt/dấu phẩy/dấu nháy và chặn formula injection.
+- Metadata: ffprobe đọc kích thước, thời lượng và byte; nguồn hỏng trả 422.
+- Từ chối fit/fade không hợp lệ ở render/document; default document/job cũ tương thích.
+- 7 Node tests: phân bổ thời lượng theo bước 0,1 giây, offset/speed SRT, tìm/thay literal, wrap Unicode, merge không vượt giới hạn/chồng lấn, WebVTT escape và validation BOM/CRLF.
+- FFmpeg thật: đo pixel vùng viền cho contain/cover; đầu/cuối tối và giữa sáng khi fade; PCM RMS kiểm tra fade audio và duck nhạc, giữ thời lượng loop.
+- Browser: rename dự án/media, undo/redo, split, thời lượng hàng loạt, lời/đánh số/thứ tự, tải TXT/CSV/ZIP/VTT, metadata, điền media, clone có file, lưu fit/fade/duck, xử lý SRT và layout mobile.
+
+Lệnh mới: `npm run test:tools` trong `src/Studio.Web`. CI chạy cùng build, integration tests, media smoke, browser smoke và đóng gói artifact.

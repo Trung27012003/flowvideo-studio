@@ -60,6 +60,28 @@ with tempfile.TemporaryDirectory(prefix='flowvideo-smoke-') as folder:
                 assert (video['width'],video['height'])==(1280,720)
                 assert any(s['codec_type']=='audio' for s in info['streams'])==audio
                 print(f'PASS {mode}: {len(ids)} source(s), {actual}s, audio={audio}')
+            # Verify actual pixels and decoded audio for composition controls.
+            import struct, math
+            outputs={}
+            for label,options in [('contain',{}),('cover',{'fit':'cover'}),('fade',{'fit':'cover','fadeSeconds':.4}),('duck',{'duckMusic':True})]:
+                job=request(f'/projects/{p}/renders',{'assetIds':[clip],'mode':'loop','duration':2,'ratio':'16:9','voiceId':voice,'musicId':voice,'musicGain':1,**options})
+                wait_job(p,job)
+                output=folder/('compose-'+label+'.mp4');urllib.request.urlretrieve(BASE+f'/jobs/{job["id"]}/download',output);outputs[label]=output
+                assert abs(float(probe(output)['format']['duration'])-2)<.15
+            def pixel_at(file,at,x,y):
+                return subprocess.check_output(['ffmpeg','-hide_banner','-loglevel','error','-ss',str(at),'-i',str(file),'-vf',f'crop=2:2:{x}:{y},scale=1:1','-frames:v','1','-f','rawvideo','-pix_fmt','rgb24','pipe:1'])
+            assert max(pixel_at(outputs['contain'],.5,2,360))<10
+            assert pixel_at(outputs['cover'],.5,2,360)[1]>80
+            assert max(pixel_at(outputs['fade'],0,640,360))<10
+            assert pixel_at(outputs['fade'],.8,640,360)[1]>80
+            assert max(pixel_at(outputs['fade'],1.96,640,360))<30
+            def audio_rms(file,start,duration):
+                raw=subprocess.check_output(['ffmpeg','-hide_banner','-loglevel','error','-ss',str(start),'-i',str(file),'-t',str(duration),'-map','0:a:0','-ac','1','-ar','16000','-f','f32le','pipe:1'])
+                values=struct.unpack('<'+'f'*(len(raw)//4),raw)
+                return math.sqrt(sum(v*v for v in values)/len(values))
+            assert audio_rms(outputs['duck'],.2,.5)<audio_rms(outputs['contain'],.2,.5)*.85
+            assert audio_rms(outputs['fade'],0,.05)<audio_rms(outputs['fade'],.5,.1)*.3
+            print('PASS contain/cover pixels, fade in/out pixels and audio, sidechain music ducking, loop duration')
             # Trim must select the requested content, not just shorten the output.
             ffmpeg('-f','lavfi','-i','color=c=red:s=320x240:d=1','-f','lavfi','-i','color=c=blue:s=320x240:d=1','-filter_complex','[0:v][1:v]concat=n=2:v=1:a=0[v]','-map','[v]','-c:v','libx264','-pix_fmt','yuv420p',str(folder/'colors.mp4'))
             colors=upload(p,folder/'colors.mp4')['id']

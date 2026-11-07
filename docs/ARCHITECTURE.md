@@ -1,4 +1,4 @@
-# Kiến trúc v0.6
+# Kiến trúc v0.7
 
 Angular → HTTP API ASP.NET Core → EF Core SQLite; BackgroundService đọc job queued và gọi FFmpeg. Browser polling theo tải: 2,5 giây khi active, 15 giây khi idle, 30 giây khi lỗi; không gửi khi tab ẩn. Mỗi vòng đợi request hoàn tất trước khi hẹn lần sau; version guard tránh phản hồi cũ ghi đè dự án mới. File dùng ID sinh bởi server, không dùng tên upload làm đường dẫn. FFmpeg arguments được truyền bằng ArgumentList, không qua shell.
 
@@ -63,3 +63,12 @@ Resolution/VoiceGain/MusicGain là trường JSON optional với default 720/1/0
 ProjectTools xuất package flowvideo.storyboard schemaVersion 1, không chứa file media hoặc secret. Nhập giới hạn 2 MiB, kiểm tra structure/options, bỏ asset/voice/music references, reset start về 0, tạo scene/project IDs mới và lưu transaction. Frontend lưu bản đang sửa trước export/import để giữ thay đổi. Import tạo project mới, không thay dữ liệu project cũ.
 
 Thư viện tìm/lọc bằng computed signals; preview dùng dialog native để quản lý focus/Escape. Video/audio preload metadata, SRT preview giới hạn 128 KiB. Preset/duplicate chỉ thay draft; cần lưu để giữ. Preset không reset tư liệu, lời, nhạc hay gain. Test mixer giải mã PCM từ MP4 thật và đo RMS, test 1080p dùng ffprobe, browser kiểm tra cả 10 chức năng và JSON round trip.
+
+
+## Creator tools v0.7
+
+WorkspaceTools cung cấp rename, ffprobe metadata (timeout 15 giây), clone có copy media, ZIP có giới hạn, manifest CSV và narration/shotlist exports. Clone copy file mới trước transaction DB, remap ID và cleanup khi lỗi; không copy jobs hoặc AI journal. ZIP tạo file tạm, giới hạn 20 file/100 MiB, sanitize entry names và xóa qua Response.RegisterForDispose. CSV quote ô và trung hòa tiền tố công thức.
+
+Fit/FadeSeconds/DuckMusic là trường JSON optional (contain/0/false), không migration. Normalize chọn scale/pad hoặc scale/crop. Fade tạo vf/af cuối toàn bản xuất; chỉ re-encode video nếu có caption hoặc fade. Duck dùng voice sau gain tách nhánh điều khiển sidechaincompress, mix rồi limiter và fade.
+
+StoryboardEditor có snapshot undo/redo tối đa 20 bước cho scenes, không phục hồi cấu hình, backend version hoặc AI journal. Đổi tab kết thúc lịch sử. creator-utils.ts chứa phân bổ thời lượng bước 0,1 giây, parser/transform SRT/WebVTT thuần để test bằng Node 24. Transform xác thực kết quả trước cập nhật draft. Export text lưu document trước lấy nội dung; import JSON tiếp tục bỏ media references, clone copy media độc lập.

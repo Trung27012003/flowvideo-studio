@@ -6,11 +6,11 @@ Studio video cá nhân bằng **Angular 21 + ASP.NET Core / .NET 10 + FFmpeg**. 
 
 ![Giao diện FlowVideo Studio](docs/studio-preview.png)
 
-## Trạng thái v0.6
+## Trạng thái v0.7
 
 **Đã triển khai:** tạo/chọn dự án; nhập ảnh, video, audio, SRT; chọn và sắp xếp cảnh; cắt điểm vào/ra từng clip; ghép ảnh/video; loop trực tiếp một nguồn; thêm giọng đọc từ file và nhạc nền; burn-in SRT; hàng đợi, hủy job đang chờ/đang chạy, thử lại job lỗi; preview/tải MP4; tạo kịch bản, giọng đọc AI và phụ đề từ lời nói khi cấu hình API key; chỉnh sửa/lưu SRT không cần AI; lưu kịch bản và storyboard theo dự án; dựng theo thời lượng từng cảnh và tạo phụ đề từ lời cảnh; tạo ảnh AI theo prompt từng cảnh với hàng đợi, lịch sử và giới hạn lượt.
 
-**Chưa triển khai:** sinh video AI, sửa ảnh theo ảnh tham chiếu, editor timeline nhiều track/split, loop crossfade/ping-pong, đăng mạng xã hội, tự động tạo toàn bộ tư liệu/giọng đọc từ ý tưởng. Các chức năng này được mô tả trong [roadmap](docs/ROADMAP.md), không giả lập kết quả AI.
+**Chưa triển khai:** sinh video AI, sửa ảnh theo ảnh tham chiếu, editor timeline nhiều track, loop crossfade/ping-pong, đăng mạng xã hội, tự động tạo toàn bộ tư liệu/giọng đọc từ ý tưởng. Các chức năng này được mô tả trong [roadmap](docs/ROADMAP.md), không giả lập kết quả AI.
 
 ## Chạy phát triển
 
@@ -32,6 +32,12 @@ Tạo dự án → nhập media → chọn cảnh theo thứ tự → chỉnh đ
 Đặt biến môi trường `OPENAI_API_KEY` trong terminal chạy backend; `OPENAI_MODEL` mặc định `gpt-4o-mini`. Không đặt key trong Angular hay commit vào Git. File `.env.example` chỉ là mẫu; ứng dụng **không tự đọc `.env`**. Tạo kịch bản, giọng đọc và nhận diện phụ đề đều có thể phát sinh phí. `OPENAI_TTS_MODEL` mặc định `gpt-4o-mini-tts`; STT dùng `whisper-1` để lấy mốc thời gian. Cần model được tài khoản cho phép sử dụng.
 
 Bấm **Lưu kịch bản** để giữ nội dung theo dự án. Có thể chia các đoạn thành cảnh, chọn tư liệu và dựng bằng storyboard; Ảnh có thể tạo riêng bằng nút AI cho từng cảnh; chưa tự tạo toàn bộ tư liệu cho cả kịch bản.
+
+## Đợt 30 chức năng v0.7
+
+Thêm đổi tên/nhân bản dự án kèm media độc lập; đổi tên và xem thông số media; sắp xếp/chọn hàng loạt/tải ZIP/xuất CSV thư viện; hoàn tác/làm lại và tách đôi cảnh; đảo/đưa cảnh về đầu/cuối; chỉnh thời lượng, đánh số, tìm/thay lời và gán media hàng loạt; đếm từ, xuất lời TXT/shotlist CSV; 6 công cụ SRT/WebVTT; contain/cover, fade và tự hạ nhạc dưới giọng.
+
+Danh sách đủ **30 mục**, hướng dẫn và giới hạn: [BATCH-V07.md](docs/BATCH-V07.md). Tất cả chạy không cần API key. Không thêm bảng DB; cấu hình cũ giữ mặc định tương thích.
 
 ## Đợt 10 chức năng v0.6
 
@@ -79,8 +85,8 @@ Editor SRT không cần key. AI cần tài khoản có quyền dùng model; đã
 - Ghép: ảnh 5 giây/cảnh; video giữ thời lượng nguồn trong giới hạn; đầu ra dừng ở thời lượng media hoặc giới hạn người dùng, tùy giá trị nhỏ hơn.
 - Cắt clip: nhập điểm vào/ra theo giây trong danh sách cảnh; để trống điểm ra để lấy đến cuối nguồn. Loop lặp phần đã cắt. Điểm vượt thời lượng nguồn sẽ khiến job báo lỗi.
 - Loop: chọn đúng một ảnh/video, lặp trực tiếp đến thời lượng đích; không bảo đảm điểm nối liền mạch.
-- Đầu ra: H.264/AAC MP4, 30 fps; 720×1280/1280×720 hoặc 1080×1920/1920×1080; giữ tỉ lệ nguồn bằng letterbox.
-- Audio gốc của clip bị bỏ. Giọng đọc có thể là file audio đã nhập hoặc MP3 tạo bằng TTS. Giọng mặc định 100%, nhạc mặc định 18%, chỉnh được 0–200%; limiter 0,95, chưa có auto-ducking.
+- Đầu ra: H.264/AAC MP4, 30 fps; 720×1280/1280×720 hoặc 1080×1920/1920×1080; chọn contain (letterbox) hoặc cover (cắt giữa).
+- Audio gốc của clip bị bỏ. Giọng đọc có thể là file audio đã nhập hoặc MP3 tạo bằng TTS. Giọng mặc định 100%, nhạc mặc định 18%, chỉnh được 0–200%; limiter 0,95, tùy chọn hạ nhạc bằng sidechain khi có giọng. Có fade đầu/cuối toàn video/audio 0–2 giây.
 - SRT phải là UTF-8. Phụ đề được burn-in và có thể tải SRT sau render mới từ v0.6; sửa nội dung/mốc thời gian ở màn hình Giọng đọc & phụ đề.
 - Tối đa 250 MB/file, 30 cảnh/job, 600 giây; một worker render tuần tự.
 - Job Queued còn lại được chạy khi mở lại; job Running bị gián đoạn được đánh dấu Failed để thử lại thủ công.
@@ -96,6 +102,7 @@ SQLite và media nằm trong `data/` tương đối với backend; có thể đ�
 ```bash
 dotnet build src/Studio.Api -c Release
 dotnet test tests/Studio.Api.Tests -c Release
+npm run test:tools --prefix src/Studio.Web
 cd src/Studio.Web && npm ci && npm run build
 cd ../..
 python3 scripts/smoke.py

@@ -8,7 +8,79 @@
     </div>
     <span class="hint">Nhớ lưu sau khi chỉnh sửa.</span>
   </div>
-  <fieldset [disabled]="disabled()">
+  <fieldset [disabled]="disabled() || working()">
+    <details class="batch-tools" open>
+      <summary>Công cụ storyboard hàng loạt</summary>
+      <p>
+        {{ words() }} từ · khoảng {{ ((words() / 150) * 60).toFixed(0) }} giây đọc ở 150 từ/phút
+        (ước tính)
+      </p>
+      <div class="actions">
+        <button (click)="undo()" [disabled]="!undoStack().length">Hoàn tác cảnh</button>
+        <button (click)="redo()" [disabled]="!redoStack().length">Làm lại cảnh</button>
+        <button (click)="reverse()">Đảo thứ tự cảnh</button>
+        <button (click)="bulk('number')">Đánh số tên cảnh</button>
+        <button (click)="bulk('fill')">Điền tư liệu còn thiếu</button>
+        <button (click)="bulk('clear')">Gỡ toàn bộ tư liệu cảnh</button>
+      </div>
+      <div class="settings">
+        <label
+          >Giây cho mỗi cảnh<input
+            type="number"
+            min="0.1"
+            max="600"
+            step="0.1"
+            [(ngModel)]="bulkDuration"
+        /></label>
+        <button (click)="bulk('duration')">Áp thời lượng tất cả</button>
+        <label
+          >Tổng mục tiêu (giây)<input
+            type="number"
+            min="0.1"
+            max="600"
+            step="0.1"
+            [(ngModel)]="targetDuration"
+        /></label>
+        <button (click)="bulk('scale')">Co giãn theo tổng</button>
+      </div>
+      <div class="settings">
+        <label>Tìm trong lời cảnh<input [(ngModel)]="findText" maxlength="2000" /></label>
+        <label>Thay bằng trong lời cảnh<input [(ngModel)]="replaceText" maxlength="2000" /></label>
+        <button (click)="bulk('replace')">Thay lời hàng loạt</button>
+      </div>
+      <div class="actions">
+        <button (click)="exportText.emit('narration')">Xuất lời đọc TXT</button
+        ><button (click)="exportText.emit('shotlist')">Xuất shotlist CSV</button>
+      </div>
+      <p class="hint">
+        Hoàn tác tối đa 20 bước trong phiên mở storyboard. Tách giữ nguyên lời ở hai phần; hãy sửa
+        lại sau khi tách.
+      </p>
+      @if (actionError()) {
+        <p role="alert">{{ actionError() }}</p>
+      }
+    </details>
+    <div class="settings">
+      <label
+        >Cách vừa khung storyboard<select [ngModel]="fit()" (ngModelChange)="fit.set($event)">
+          <option value="contain">Giữ trọn hình (viền)</option>
+          <option value="cover">Lấp đầy (cắt giữa)</option>
+        </select></label
+      >
+      <label
+        >Fade đầu/cuối storyboard (s)<input
+          type="number"
+          min="0"
+          max="2"
+          step="0.1"
+          [ngModel]="fadeSeconds()"
+          (ngModelChange)="fadeSeconds.set($event)"
+      /></label>
+      <label
+        ><input type="checkbox" [ngModel]="duckMusic()" (ngModelChange)="duckMusic.set($event)" />Hạ
+        nhạc khi có giọng storyboard</label
+      >
+    </div>
     <div class="preset-actions">
       <span>Preset nhanh</span
       ><button class="secondary" (click)="preset('shorts')">Preset Shorts</button
@@ -86,6 +158,23 @@
         <article class="scene">
           <div class="scene-head">
             <b>{{ i + 1 }} / {{ scenes().length }}</b>
+            <button (click)="edge(i, false)" [disabled]="i === 0" aria-label="Đưa cảnh về đầu">
+              Về đầu
+            </button>
+            <button
+              (click)="edge(i, true)"
+              [disabled]="i === scenes().length - 1"
+              aria-label="Đưa cảnh về cuối"
+            >
+              Về cuối
+            </button>
+            <button
+              (click)="split(scene.id)"
+              [disabled]="working() || scenes().length >= 30"
+              aria-label="Tách đôi cảnh"
+            >
+              Tách đôi
+            </button>
             <div>
               <button
                 (click)="move(i, -1)"
@@ -111,6 +200,8 @@
           <label
             >Tên cảnh<input
               [ngModel]="scene.title"
+              (focus)="beginEdit()"
+              (blur)="endEdit()"
               (ngModelChange)="change(scene.id, { title: $event })"
               maxlength="120"
           /></label>
@@ -142,6 +233,8 @@
                 max="600"
                 step="0.1"
                 [ngModel]="scene.duration"
+                (focus)="beginEdit()"
+                (blur)="endEdit()"
                 (ngModelChange)="change(scene.id, { duration: $event })"
             /></label>
             @if (video(scene.assetId)) {
@@ -151,6 +244,8 @@
                   min="0"
                   step="0.1"
                   [ngModel]="scene.start"
+                  (focus)="beginEdit()"
+                  (blur)="endEdit()"
                   (ngModelChange)="change(scene.id, { start: $event })"
               /></label>
             }
@@ -158,6 +253,8 @@
           <label
             >Lời của cảnh<textarea
               [ngModel]="scene.narration"
+              (focus)="beginEdit()"
+              (blur)="endEdit()"
               (ngModelChange)="change(scene.id, { narration: $event })"
               maxlength="2000"
               placeholder="Lời dẫn / nội dung phụ đề…"
@@ -166,6 +263,8 @@
           <label
             >Ghi chú hình ảnh / prompt<textarea
               [ngModel]="scene.prompt"
+              (focus)="beginEdit()"
+              (blur)="endEdit()"
               (ngModelChange)="change(scene.id, { prompt: $event })"
               maxlength="4000"
               placeholder="Mô tả cảnh để dùng lại khi tạo tư liệu…"

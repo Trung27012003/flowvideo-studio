@@ -22,6 +22,8 @@ jobs:
       - run: dotnet build src/Studio.Api -c Release
       - run: npm ci && npm run build
         working-directory: src/Studio.Web
+      - run: npm run test:tools
+        working-directory: src/Studio.Web
       - run: dotnet test tests/Studio.Api.Tests -c Release
       - run: python3 scripts/smoke.py
       - name: Install browser

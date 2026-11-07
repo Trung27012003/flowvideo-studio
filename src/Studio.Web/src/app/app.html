@@ -68,7 +68,7 @@
         ></span
       >
       <div class="header-right">
-        <span class="pill">MVP v0.6</span
+        <span class="pill">MVP v0.7</span
         ><select
           aria-label="Chọn dự án"
           [ngModel]="projectId()"
@@ -116,6 +116,25 @@
             [disabled]="busy()"
         /></label>
       </form>
+      @if (projectId()) {
+        <div class="project-bar">
+          <label>Tên dự án hiện tại<input [(ngModel)]="renameProjectText" maxlength="120" /></label>
+          <button
+            class="secondary"
+            (click)="renameProject()"
+            [disabled]="busy() || !renameProjectText.trim()"
+          >
+            Đổi tên dự án
+          </button>
+          <button
+            class="secondary"
+            (click)="duplicateProject()"
+            [disabled]="busy() || !documentLoaded()"
+          >
+            Nhân bản dự án kèm media
+          </button>
+        </div>
+      }
       @if (error()) {
         <div class="alert error" role="alert">{{ error() }}</div>
       }
@@ -141,6 +160,21 @@
                 <h2>Thiết lập video</h2>
                 <span>01</span>
               </div>
+              <label
+                >Cách vừa khung<select [(ngModel)]="fit">
+                  <option value="contain">Giữ trọn hình (viền)</option>
+                  <option value="cover">Lấp đầy (cắt giữa)</option>
+                </select></label
+              >
+              <label
+                >Fade đầu/cuối (s)<input
+                  type="number"
+                  min="0"
+                  max="2"
+                  step="0.1"
+                  [(ngModel)]="fadeSeconds"
+              /></label>
+              <label><input type="checkbox" [(ngModel)]="duckMusic" />Hạ nhạc khi có giọng</label>
               <label
                 >Chế độ dựng<select [(ngModel)]="mode">
                   <option value="concat">Ghép ảnh / video</option>
@@ -377,9 +411,42 @@
               Xóa bộ lọc</button
             ><span>{{ filteredAssets().length }} / {{ assets().length }} tài nguyên</span>
           </div>
+          <div class="library-tools">
+            <label
+              >Sắp xếp thư viện<select
+                [ngModel]="librarySort()"
+                (ngModelChange)="librarySort.set($event)"
+              >
+                <option value="name-asc">Tên A–Z</option>
+                <option value="name-desc">Tên Z–A</option>
+                <option value="kind-asc">Loại A–Z</option>
+                <option value="kind-desc">Loại Z–A</option>
+              </select></label
+            >
+            <button (click)="selectVisible()">Chọn trang đang lọc (tối đa 20)</button>
+            <button (click)="librarySelected.set([])">Bỏ chọn media</button>
+            <button
+              (click)="downloadWorkspace('archive')"
+              [disabled]="busy() || !librarySelected().length"
+            >
+              Tải ZIP {{ librarySelected().length }} media
+            </button>
+            <button (click)="downloadWorkspace('manifest')" [disabled]="busy() || !projectId()">
+              Xuất danh mục CSV
+            </button>
+          </div>
           <div class="library">
             @for (a of filteredAssets(); track a.id) {
               <article class="library-card">
+                <label
+                  ><input
+                    type="checkbox"
+                    [checked]="librarySelected().includes(a.id)"
+                    (change)="toggleLibrary(a.id)"
+                    [disabled]="!librarySelected().includes(a.id) && librarySelected().length >= 20"
+                    [attr.aria-label]="'Chọn media ' + a.name"
+                  />Chọn tải ZIP</label
+                >
                 <button
                   class="media-preview"
                   (click)="openAsset(a)"
@@ -473,6 +540,10 @@
         @if (projectId() && documentLoaded()) {
           <app-storyboard
             [(scenes)]="scenes"
+            [(fit)]="boardFit"
+            [(fadeSeconds)]="boardFade"
+            [(duckMusic)]="boardDuck"
+            (exportText)="downloadWorkspace($event)"
             [(ratio)]="boardRatio"
             [(voiceId)]="boardVoice"
             [(musicId)]="boardMusic"
@@ -617,6 +688,56 @@
                 >Tên bản mới<input [(ngModel)]="subtitleName" maxlength="120"
               /></label>
             </div>
+            <details class="batch-tools" open>
+              <summary>Công cụ phụ đề hàng loạt</summary>
+              <div class="subtitle-toolbar">
+                <label
+                  >Độ lệch SRT (s)<input
+                    type="number"
+                    step="0.1"
+                    min="-3600"
+                    max="3600"
+                    [(ngModel)]="offsetSeconds" /></label
+                ><button (click)="subtitleTool('offset')" [disabled]="busy()">Dịch mốc SRT</button>
+                <label
+                  >Tốc độ SRT<input
+                    type="number"
+                    min="0.25"
+                    max="4"
+                    step="0.05"
+                    [(ngModel)]="subtitleSpeed" /></label
+                ><button (click)="subtitleTool('speed')" [disabled]="busy()">Đổi tốc độ SRT</button>
+              </div>
+              <div class="subtitle-toolbar">
+                <label>Tìm trong SRT<input [(ngModel)]="subtitleFind" /></label
+                ><label>Thay bằng trong SRT<input [(ngModel)]="subtitleReplace" /></label
+                ><button (click)="subtitleTool('replace')" [disabled]="busy()">Thay chữ SRT</button>
+              </div>
+              <div class="subtitle-toolbar">
+                <label
+                  >Ký tự mỗi dòng<input
+                    type="number"
+                    min="20"
+                    max="80"
+                    [(ngModel)]="wrapLength" /></label
+                ><button (click)="subtitleTool('wrap')" [disabled]="busy()">Ngắt dòng SRT</button>
+                <label
+                  >Khoảng nghỉ gộp (s)<input
+                    type="number"
+                    min="0"
+                    max="5"
+                    step="0.1"
+                    [(ngModel)]="mergeGap" /></label
+                ><button (click)="subtitleTool('merge')" [disabled]="busy()">
+                  Gộp câu SRT gần nhau
+                </button>
+                <button (click)="subtitleTool('vtt')" [disabled]="busy()">Xuất WebVTT</button>
+              </div>
+              <p class="hint">
+                Chỉnh trực tiếp bản nháp, chưa thay file gốc. Gộp câu tối đa 10 giây. Dịch mốc không
+                cho kết quả âm.
+              </p>
+            </details>
             <label class="field"
               >Nội dung SRT<textarea
                 class="srt-content"
@@ -654,16 +775,18 @@
       }
       @if (tab() === 'roadmap') {
         <section class="panel roadmap">
-          <h2>Đã hoạt động trong v0.6</h2>
+          <h2>Đã hoạt động trong v0.7</h2>
           <p>
-            Quản lý dự án và media, cắt điểm vào/ra từng clip, ghép ảnh/video, loop trực tiếp, audio
-            từ file, phụ đề SRT, hàng đợi lưu SQLite và tải MP4. Viết kịch bản, tạo giọng đọc và
-            nhận diện phụ đề AI khi có API key. Chỉnh sửa SRT không cần AI.
+            v0.7 bổ sung 30 công cụ: nhân bản dự án kèm media, ZIP/CSV/TXT/WebVTT, thông số file,
+            hoàn tác và chỉnh cảnh/phụ đề hàng loạt, contain/cover, fade và hạ nhạc theo giọng. Quản
+            lý dự án và media, cắt điểm vào/ra từng clip, ghép ảnh/video, loop trực tiếp, audio từ
+            file, phụ đề SRT, hàng đợi lưu SQLite và tải MP4. Viết kịch bản, tạo giọng đọc và nhận
+            diện phụ đề AI khi có API key. Chỉnh sửa SRT không cần AI.
           </p>
           <h2>Giai đoạn tiếp theo</h2>
           <p>1. Tự động tạo ảnh và giọng cho toàn storyboard.</p>
           <p>2. Tạo video AI, ảnh tham chiếu và theo dõi chi phí.</p>
-          <p>3. Timeline nhiều track, split và preview proxy.</p>
+          <p>3. Timeline nhiều track và preview proxy (đã có tách đôi cảnh).</p>
           <p>4. Loop crossfade/ping-pong và kiểm tra mối nối.</p>
           <p>5. Cắt video theo transcript và xuất nhiều phiên bản.</p>
           <p class="hint">
@@ -701,8 +824,25 @@
     @if (asset.kind === 'subtitle') {
       <pre>{{ previewText() }}</pre>
     }
+    @if (error()) {
+      <p role="alert">{{ error() }}</p>
+    }
     @if (previewError()) {
       <p role="alert">{{ previewError() }}</p>
+    }
+    <div class="subtitle-toolbar">
+      <label>Tên tài nguyên<input [(ngModel)]="renameAssetText" maxlength="180" /></label
+      ><button (click)="renameAsset()" [disabled]="busy() || !renameAssetText.trim()">
+        Đổi tên tài nguyên</button
+      ><button (click)="inspectAsset()" [disabled]="busy()">Đọc thông số media</button>
+    </div>
+    @if (metadata()) {
+      <dl aria-label="Thông số media">
+        @for (entry of metadataEntries(); track entry[0]) {
+          <dt>{{ entry[0] }}</dt>
+          <dd>{{ entry[1] }}</dd>
+        }
+      </dl>
     }
     <p class="hint">Khả năng phát audio/video phụ thuộc codec trình duyệt.</p>
     <a class="download" [href]="'/api/assets/' + asset.id + '/file'" [download]="asset.name"

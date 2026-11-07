@@ -38,7 +38,7 @@ using (var scope = app.Services.CreateScope())
 }
 app.UseDefaultFiles();
 app.UseStaticFiles();
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.6.0" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.7.0" }));
 app.MapGet(
     "/api/capabilities",
     (IConfiguration c) =>
@@ -183,7 +183,10 @@ app.MapPost(
         if (!await db.Projects.AnyAsync(x => x.Id == id))
             return Results.NotFound();
         if (
-            req.Resolution is not (720 or 1080)
+            req.Fit is not ("contain" or "cover")
+            || !double.IsFinite(req.FadeSeconds)
+            || req.FadeSeconds is < 0 or > 2
+            || req.Resolution is not (720 or 1080)
             || !double.IsFinite(req.VoiceGain)
             || req.VoiceGain is < 0 or > 2
             || !double.IsFinite(req.MusicGain)
@@ -423,6 +426,7 @@ app.MapAudio();
 app.MapStoryboard();
 app.MapImages();
 app.MapProjectTools();
+app.MapWorkspaceTools();
 app.Map("/api/{**path}", () => Results.NotFound());
 app.MapFallbackToFile("index.html");
 app.Run();

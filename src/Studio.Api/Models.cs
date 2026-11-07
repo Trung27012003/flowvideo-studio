@@ -41,7 +41,10 @@ public record RenderRequest(
     bool AutoCaptions = false,
     int Resolution = 720,
     double VoiceGain = 1,
-    double MusicGain = .18
+    double MusicGain = .18,
+    string Fit = "contain",
+    double FadeSeconds = 0,
+    bool DuckMusic = false
 );
 
 public record SceneClip(Guid AssetId, double Duration, double Start = 0, string Caption = "");

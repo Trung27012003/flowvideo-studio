@@ -1,3 +1,4 @@
+import { transformSrt, webVtt } from './creator-utils';
 import {
   Component,
   OnDestroy,
@@ -70,6 +71,24 @@ export class App implements OnInit, OnDestroy {
   );
   libraryQuery = signal('');
   libraryKind = signal('all');
+  librarySort = signal('name-asc');
+  librarySelected = signal<string[]>([]);
+  metadata = signal<Record<string, unknown> | null>(null);
+  renameProjectText = '';
+  renameAssetText = '';
+  offsetSeconds = 0;
+  subtitleSpeed = 1;
+  subtitleFind = '';
+  subtitleReplace = '';
+  wrapLength = 42;
+  mergeGap = 0.2;
+  boardFit = signal('contain');
+  boardFade = signal(0);
+  boardDuck = signal(false);
+  fit = 'contain';
+  fadeSeconds = 0;
+  duckMusic = false;
+
   private normalized(text: string) {
     return text
       .toLowerCase()
@@ -79,11 +98,18 @@ export class App implements OnInit, OnDestroy {
   }
   filteredAssets = computed(() => {
     const query = this.normalized(this.libraryQuery().trim());
-    return this.assets().filter(
-      (a) =>
-        (this.libraryKind() === 'all' || a.kind === this.libraryKind()) &&
-        this.normalized(a.name).includes(query),
-    );
+    return this.assets()
+      .filter(
+        (a) =>
+          (this.libraryKind() === 'all' || a.kind === this.libraryKind()) &&
+          this.normalized(a.name).includes(query),
+      )
+      .sort((a, b) => {
+        const key = this.librarySort().startsWith('kind') ? 'kind' : 'name';
+        const order =
+          a[key].localeCompare(b[key], 'vi', { numeric: true }) || a.id.localeCompare(b.id);
+        return this.librarySort().endsWith('desc') ? -order : order;
+      });
   });
   assetPreview = signal<Asset | null>(null);
   previewText = signal('');
@@ -204,6 +230,14 @@ export class App implements OnInit, OnDestroy {
   async selectProject(id: string) {
     const version = ++this.projectVersion;
     this.projectId.set(id);
+    this.renameProjectText = this.projects().find((p) => p.id === id)?.name || '';
+    this.librarySelected.set([]);
+    this.boardFit.set('contain');
+    this.boardFade.set(0);
+    this.boardDuck.set(false);
+    this.fit = 'contain';
+    this.fadeSeconds = 0;
+    this.duckMusic = false;
     this.libraryQuery.set('');
     this.libraryKind.set('all');
     if (this.mediaDialog?.nativeElement.open) this.mediaDialog.nativeElement.close();
@@ -253,6 +287,9 @@ export class App implements OnInit, OnDestroy {
         this.boardVoice.set(doc.voiceId || '');
         this.boardMusic.set(doc.musicId || '');
         this.boardCaptions.set(doc.autoCaptions);
+        this.boardFit.set(doc.fit ?? 'contain');
+        this.boardFade.set(doc.fadeSeconds ?? 0);
+        this.boardDuck.set(doc.duckMusic ?? false);
         this.boardResolution.set(doc.resolution ?? 720);
         this.boardVoiceGain.set(doc.voiceGain ?? 1);
         this.boardMusicGain.set(doc.musicGain ?? 0.18);
@@ -359,6 +396,9 @@ export class App implements OnInit, OnDestroy {
           mode: this.mode,
           duration: this.duration,
           ratio: this.ratio,
+          fit: this.fit,
+          fadeSeconds: this.fadeSeconds,
+          duckMusic: this.duckMusic,
           resolution: this.resolution,
           voiceGain: this.voiceVolume / 100,
           musicGain: this.musicVolume / 100,
@@ -473,6 +513,9 @@ export class App implements OnInit, OnDestroy {
           voiceId: this.boardVoice() || null,
           musicId: this.boardMusic() || null,
           autoCaptions: this.boardCaptions(),
+          fit: this.boardFit(),
+          fadeSeconds: this.boardFade(),
+          duckMusic: this.boardDuck(),
           resolution: this.boardResolution(),
           voiceGain: this.boardVoiceGain(),
           musicGain: this.boardMusicGain(),
@@ -537,6 +580,8 @@ export class App implements OnInit, OnDestroy {
   }
   async openAsset(asset: Asset) {
     this.assetPreview.set(asset);
+    this.metadata.set(null);
+    this.renameAssetText = asset.name;
     this.previewError.set('');
     this.previewText.set('Đang tải…');
     if (!this.mediaDialog.nativeElement.open) this.mediaDialog.nativeElement.showModal();
@@ -602,6 +647,130 @@ export class App implements OnInit, OnDestroy {
       );
     });
     input.value = '';
+  }
+  async renameProject() {
+    await this.perform(async () => {
+      const project = await this.api('/projects/' + this.projectId(), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: this.renameProjectText }),
+      });
+      this.projects.update((p) => p.map((x) => (x.id === project.id ? project : x)));
+      this.notice.set('Đã đổi tên dự án.');
+    });
+  }
+  async duplicateProject() {
+    await this.perform(async () => {
+      await this.storeDocument();
+      const result = await this.api('/projects/' + this.projectId() + '/duplicate', {
+        method: 'POST',
+      });
+      this.projects.update((p) => [result.project, ...p]);
+      await this.selectProject(result.project.id);
+      this.notice.set('Đã nhân bản dự án và ' + result.copiedAssets + ' media độc lập.');
+    });
+  }
+  async renameAsset() {
+    const asset = this.assetPreview();
+    if (!asset) return;
+    await this.perform(async () => {
+      const updated = await this.api('/assets/' + asset.id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: this.renameAssetText }),
+      });
+      this.assets.update((a) => a.map((x) => (x.id === updated.id ? updated : x)));
+      this.assetPreview.set(updated);
+      this.renameAssetText = updated.name;
+    });
+  }
+  async inspectAsset() {
+    const asset = this.assetPreview();
+    if (!asset) return;
+    await this.perform(async () => {
+      const value = await this.api('/assets/' + asset.id + '/metadata');
+      if (this.assetPreview()?.id === asset.id) this.metadata.set(value);
+    });
+  }
+  metadataEntries() {
+    return Object.entries(this.metadata() || {}).filter(([, v]) => v !== null);
+  }
+  toggleLibrary(id: string) {
+    this.librarySelected.update((s) =>
+      s.includes(id) ? s.filter((x) => x !== id) : s.length < 20 ? [...s, id] : s,
+    );
+  }
+  selectVisible() {
+    this.librarySelected.set(
+      this.filteredAssets()
+        .slice(0, 20)
+        .map((a) => a.id),
+    );
+  }
+  private downloadBlob(blob: Blob, name: string) {
+    const url = URL.createObjectURL(blob),
+      link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  async downloadWorkspace(kind: string) {
+    await this.perform(async () => {
+      if (kind === 'narration' || kind === 'shotlist') await this.storeDocument();
+      const suffix =
+        kind === 'archive'
+          ? 'assets/archive'
+          : kind === 'manifest'
+            ? 'assets/manifest'
+            : 'storyboard/' + kind;
+      const response = await fetch('/api/projects/' + this.projectId() + '/' + suffix, {
+        method: kind === 'archive' ? 'POST' : 'GET',
+        headers: kind === 'archive' ? { 'Content-Type': 'application/json' } : {},
+        body: kind === 'archive' ? JSON.stringify({ assetIds: this.librarySelected() }) : undefined,
+        signal: AbortSignal.any([this.controller.signal, AbortSignal.timeout(120000)]),
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(
+          result.error || result.detail || 'Không xuất được file (' + response.status + ').',
+        );
+      }
+      const extension = kind === 'archive' ? 'zip' : kind === 'narration' ? 'txt' : 'csv';
+      this.downloadBlob(await response.blob(), 'flowvideo-' + kind + '.' + extension);
+      this.notice.set('Đã xuất ' + kind + '.');
+    });
+  }
+  subtitleTool(action: string) {
+    this.error.set('');
+    this.notice.set('');
+    try {
+      if (action === 'vtt')
+        this.downloadBlob(
+          new Blob([webVtt(this.subtitleContent)], { type: 'text/vtt;charset=utf-8' }),
+          'flowvideo-subtitles.vtt',
+        );
+      else {
+        const amount =
+          action === 'offset'
+            ? this.offsetSeconds
+            : action === 'speed'
+              ? this.subtitleSpeed
+              : action === 'wrap'
+                ? this.wrapLength
+                : this.mergeGap;
+        this.subtitleContent = transformSrt(
+          this.subtitleContent,
+          action,
+          amount,
+          this.subtitleFind,
+          this.subtitleReplace,
+        );
+        this.notice.set('Đã sửa bản nháp SRT. Bấm Lưu bản phụ đề để giữ bản mới.');
+      }
+    } catch (e) {
+      this.error.set(e instanceof Error ? e.message : 'Không xử lý được SRT.');
+    }
   }
   async generateScript() {
     await this.perform(async () => {

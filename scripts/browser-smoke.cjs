@@ -292,10 +292,10 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     await page
       .getByRole("button", { name: "Preset Shorts", exact: true })
       .click();
-    await page.waitForFunction(
-      () =>
-        document.querySelector("app-storyboard .settings select").value ===
-        "9:16",
+    await page.waitForFunction(() =>
+      Array.from(
+        document.querySelectorAll("app-storyboard .settings select"),
+      ).some((s) => s.value === "9:16"),
     );
     await page
       .getByLabel("Độ phân giải storyboard")
@@ -311,10 +311,10 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     await page
       .getByRole("button", { name: "Preset YouTube", exact: true })
       .click();
-    await page.waitForFunction(
-      () =>
-        document.querySelector("app-storyboard .settings select").value ===
-        "16:9",
+    await page.waitForFunction(() =>
+      Array.from(
+        document.querySelectorAll("app-storyboard .settings select"),
+      ).some((s) => s.value === "16:9"),
     );
     await page
       .getByRole("button", { name: "Preset 720p", exact: true })
@@ -654,6 +654,222 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
         ).json()
       ).length,
       0,
+    );
+    // v0.7: exercise offline creator tools against persisted projects and real files.
+    await page.getByLabel("Tên dự án hiện tại").fill("Batch 30 features");
+    await page
+      .getByRole("button", { name: "Đổi tên dự án", exact: true })
+      .click();
+    await page.waitForFunction(() =>
+      document
+        .querySelector('[aria-label="Chọn dự án"]')
+        ?.selectedOptions[0]?.textContent.includes("Batch 30 features"),
+    );
+    const board = page.locator("app-storyboard");
+    await board.getByLabel("Giây cho mỗi cảnh", { exact: true }).fill("2");
+    await board.getByRole("button", { name: "Áp thời lượng tất cả" }).click();
+    await board.getByLabel("Tổng mục tiêu (giây)", { exact: true }).fill("6");
+    await board.getByRole("button", { name: "Co giãn theo tổng" }).click();
+    await page.waitForFunction(
+      () =>
+        Array.from(
+          document.querySelectorAll("app-storyboard .scene input[type=number]"),
+        ).filter((x) => x.value === "3").length === 2,
+    );
+    await board
+      .getByRole("button", { name: "Hoàn tác cảnh", exact: true })
+      .click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("app-storyboard .scene .timing input").value ===
+        "2",
+    );
+    assert.equal(
+      await board
+        .getByLabel("Thời lượng cảnh (s)", { exact: true })
+        .first()
+        .inputValue(),
+      "2",
+    );
+    await board
+      .getByRole("button", { name: "Làm lại cảnh", exact: true })
+      .click();
+    await board.getByLabel("Tách đôi cảnh", { exact: true }).first().click();
+    await page.waitForFunction(
+      () => document.querySelectorAll("app-storyboard .scene").length === 3,
+    );
+    await board.getByRole("button", { name: "Đảo thứ tự cảnh" }).click();
+    await board.getByRole("button", { name: "Đánh số tên cảnh" }).click();
+    await board
+      .getByLabel("Tên cảnh", { exact: true })
+      .first()
+      .fill("Kiểm thử tìm thay");
+    await board
+      .getByLabel("Lời của cảnh", { exact: true })
+      .first()
+      .fill("Xin chào nhóm sáng tạo");
+    await board.getByLabel("Tìm trong lời cảnh", { exact: true }).fill("nhóm");
+    await board
+      .getByLabel("Thay bằng trong lời cảnh", { exact: true })
+      .fill("bạn");
+    await board.getByRole("button", { name: "Thay lời hàng loạt" }).click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("app-storyboard .scene textarea").value ===
+        "Xin chào bạn sáng tạo",
+    );
+    assert.equal(
+      await board
+        .getByLabel("Lời của cảnh", { exact: true })
+        .first()
+        .inputValue(),
+      "Xin chào bạn sáng tạo",
+    );
+    for (const [name, extension] of [
+      ["Xuất lời đọc TXT", ".txt"],
+      ["Xuất shotlist CSV", ".csv"],
+    ]) {
+      const download = page.waitForEvent("download");
+      await board.getByRole("button", { name, exact: true }).click();
+      assert((await download).suggestedFilename().endsWith(extension));
+    }
+    await page
+      .getByRole("button", { name: "Thư viện media", exact: true })
+      .click();
+    await page.waitForFunction(
+      () => !document.querySelector("input[type=file][multiple]")?.disabled,
+    );
+    await page.locator("input[type=file][multiple]").setInputFiles(clip);
+    await page
+      .getByRole("button", { name: "Xem trước sample.mp4", exact: true })
+      .waitFor();
+    await page
+      .getByRole("button", { name: "Xem trước sample.mp4", exact: true })
+      .click();
+    await page.getByRole("button", { name: "Đọc thông số media" }).click();
+    await page.getByLabel("Thông số media", { exact: true }).waitFor();
+    assert(
+      (await page.getByLabel("Thông số media").innerText()).includes("320"),
+    );
+    await page
+      .getByLabel("Tên tài nguyên", { exact: true })
+      .fill("Clip độc lập");
+    await page
+      .getByRole("button", { name: "Đổi tên tài nguyên", exact: true })
+      .click();
+    await page
+      .getByRole("heading", { name: "Clip độc lập.mp4", exact: true })
+      .waitFor();
+    await page
+      .getByRole("button", { name: "Đóng xem trước tài nguyên" })
+      .click();
+    await page
+      .getByRole("button", {
+        name: "Chọn trang đang lọc (tối đa 20)",
+        exact: true,
+      })
+      .click();
+    let zip = page.waitForEvent("download");
+    await page
+      .getByRole("button", { name: "Tải ZIP 1 media", exact: true })
+      .click();
+    assert((await zip).suggestedFilename().endsWith(".zip"));
+    let csv = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Xuất danh mục CSV" }).click();
+    assert((await csv).suggestedFilename().endsWith(".csv"));
+    await page.getByRole("button", { name: "Storyboard", exact: true }).click();
+    await board.getByRole("button", { name: "Điền tư liệu còn thiếu" }).click();
+    await page.waitForFunction(() =>
+      Array.from(
+        document.querySelectorAll("app-storyboard .scene select"),
+      ).every(
+        (x) => x.value !== "" && x.value !== "null" && x.value !== "0: null",
+      ),
+    );
+    await board.getByLabel("Cách vừa khung storyboard").selectOption("cover");
+    await board.getByLabel("Fade đầu/cuối storyboard (s)").fill("0.2");
+    await board.getByLabel("Hạ nhạc khi có giọng storyboard").check();
+    await page
+      .getByRole("button", { name: "Nhân bản dự án kèm media", exact: true })
+      .click();
+    await page.waitForFunction(() =>
+      document
+        .querySelector('[aria-label="Chọn dự án"]')
+        ?.selectedOptions[0]?.textContent.includes("bản sao"),
+    );
+    const clonedProject = await page
+      .getByLabel("Chọn dự án", { exact: true })
+      .inputValue();
+    assert.notEqual(clonedProject, importedProject);
+    await page.waitForFunction(
+      () => !document.querySelector("app-storyboard fieldset")?.disabled,
+    );
+    const cloned = await (
+      await page.request.get(
+        "http://127.0.0.1:5099/api/projects/" + clonedProject + "/document",
+      )
+    ).json();
+    assert.equal(cloned.document.scenes.length, 3);
+    assert(cloned.document.scenes.every((s) => s.assetId));
+    assert.equal(cloned.document.fit, "cover");
+    assert.equal(cloned.document.fadeSeconds, 0.2);
+    assert.equal(cloned.document.duckMusic, true);
+    await page
+      .getByRole("button", { name: "Giọng đọc & phụ đề", exact: true })
+      .click();
+    await page
+      .getByLabel("Nội dung SRT", { exact: true })
+      .fill(
+        "1\n00:00:01,000 --> 00:00:02,000\nXin chào\n\n2\n00:00:02,100 --> 00:00:03,000\nFlowVideo",
+      );
+    await page.getByLabel("Độ lệch SRT (s)", { exact: true }).fill("1");
+    await page
+      .getByRole("button", { name: "Dịch mốc SRT", exact: true })
+      .click();
+    await page.waitForFunction(() =>
+      document
+        .querySelector(".srt-content")
+        .value.includes("00:00:02,000 --> 00:00:03,000"),
+    );
+    assert(
+      (
+        await page.getByLabel("Nội dung SRT", { exact: true }).inputValue()
+      ).includes("00:00:02,000 --> 00:00:03,000"),
+    );
+    await page.getByLabel("Tốc độ SRT", { exact: true }).fill("2");
+    await page
+      .getByRole("button", { name: "Đổi tốc độ SRT", exact: true })
+      .click();
+    await page.getByLabel("Tìm trong SRT", { exact: true }).fill("Xin");
+    await page.getByLabel("Thay bằng trong SRT", { exact: true }).fill("Kính");
+    await page
+      .getByRole("button", { name: "Thay chữ SRT", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Ngắt dòng SRT", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Gộp câu SRT gần nhau", exact: true })
+      .click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector(".srt-content").value.trim().split(" --> ")
+          .length === 2,
+    );
+    assert.equal(
+      (await page.getByLabel("Nội dung SRT", { exact: true }).inputValue())
+        .trim()
+        .split(" --> ").length,
+      2,
+    );
+    const vtt = page.waitForEvent("download");
+    await page
+      .getByRole("button", { name: "Xuất WebVTT", exact: true })
+      .click();
+    assert((await vtt).suggestedFilename().endsWith(".vtt"));
+    await page.getByRole("button", { name: "Storyboard", exact: true }).click();
+    console.log(
+      "PASS v0.7 browser: rename, history, bulk scene tools, split, text/CSV/ZIP/VTT downloads, metadata, media rename, independent project clone, fit/fade/duck persistence, SRT transformations",
     );
     await page.evaluate(() => scrollTo(0, 0));
     await page.screenshot({

@@ -55,6 +55,14 @@
 - [x] Mixer âm lượng giọng và nhạc
 - [x] Render Full HD 1080p
 
+## V0.7 — đợt 30 chức năng đã bổ sung
+
+- [x] 8 chức năng dự án/thư viện: rename, clone media độc lập, metadata, sort, chọn hàng loạt, ZIP/CSV.
+- [x] 13 chức năng storyboard: lịch sử cảnh, split, sắp xếp/thời lượng/lời/media hàng loạt, thống kê và TXT/shotlist.
+- [x] 6 công cụ SRT/WebVTT: offset, tốc độ, tìm/thay, wrap, merge và xuất VTT.
+- [x] 3 chức năng dựng: contain/cover, fade video/audio và sidechain duck nhạc.
+- [x] Danh sách và giới hạn từng mục: [BATCH-V07](BATCH-V07.md).
+
 ## Tiếp theo — chất lượng nền tảng (2–3 tuần)
 
 - ffprobe kiểm tra file ngay sau upload; duration, thumbnail, waveform

@@ -187,7 +187,9 @@ public class RenderWorker(
                     if (start > 0)
                         args.AddRange(["-ss", Number(start)]);
                     var filter =
-                        $"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30";
+                        req.Fit == "cover"
+                            ? $"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1,fps=30"
+                            : $"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30";
                     if (scene is not null && a.Kind == "video")
                         filter += $",tpad=stop_mode=clone:stop_duration={Number(take)}";
                     args.AddRange([
@@ -267,30 +269,43 @@ public class RenderWorker(
             {
                 File.Copy(store.AssetPath(assets[sub]), Path.Combine(temp, "captions.srt"), true);
             }
+            var endTime = req.Mode == "loop" ? req.Duration : Math.Min(req.Duration, elapsed);
+            var fade = Math.Min(req.FadeSeconds, endTime / 2);
+            var videoFilters = new List<string>();
             if (hasCaptions)
-                final.AddRange([
-                    "-vf",
-                    "subtitles=captions.srt:force_style='FontName=DejaVu Sans,FontSize=18,MarginV=36'",
-                ]);
+                videoFilters.Add(
+                    "subtitles=captions.srt:force_style='FontName=DejaVu Sans,FontSize=18,MarginV=36'"
+                );
+            if (fade > 0)
+                videoFilters.Add(
+                    $"fade=t=in:st=0:d={Number(fade)},fade=t=out:st={Number(endTime - fade)}:d={Number(fade)}"
+                );
+            if (videoFilters.Count > 0)
+                final.AddRange(["-vf", string.Join(',', videoFilters)]);
+            var audioFade =
+                fade > 0
+                    ? $",afade=t=in:st=0:d={Number(fade)},afade=t=out:st={Number(endTime - fade)}:d={Number(fade)}"
+                    : "";
             final.AddRange(["-map", "0:v:0"]);
+            const string limiter = "alimiter=limit=0.95:level=false:latency=true";
             if (voiceIndex is int vi && musicIndex is int mi)
-                final.AddRange([
-                    "-filter_complex",
-                    $"[{vi}:a]volume={Number(req.VoiceGain)},apad[v];[{mi}:a]volume={Number(req.MusicGain)}[m];[v][m]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.95:level=false:latency=true[a]",
-                    "-map",
-                    "[a]",
-                ]);
+            {
+                var mixer = req.DuckMusic
+                    ? $"[{vi}:a]volume={Number(req.VoiceGain)},apad,asplit=2[v][side];[{mi}:a]volume={Number(req.MusicGain)}[m];[m][side]sidechaincompress=threshold=0.02:ratio=8:attack=20:release=300[duck];[v][duck]amix=inputs=2:duration=longest:normalize=0,{limiter}{audioFade}[a]"
+                    : $"[{vi}:a]volume={Number(req.VoiceGain)},apad[v];[{mi}:a]volume={Number(req.MusicGain)}[m];[v][m]amix=inputs=2:duration=longest:normalize=0,{limiter}{audioFade}[a]";
+                final.AddRange(["-filter_complex", mixer, "-map", "[a]"]);
+            }
             else if (voiceIndex is int v)
                 final.AddRange([
                     "-af",
-                    $"volume={Number(req.VoiceGain)},apad,alimiter=limit=0.95:level=false:latency=true",
+                    $"volume={Number(req.VoiceGain)},apad,{limiter}{audioFade}",
                     "-map",
                     $"{v}:a",
                 ]);
             else if (musicIndex is int m)
                 final.AddRange([
                     "-af",
-                    $"volume={Number(req.MusicGain)},alimiter=limit=0.95:level=false:latency=true",
+                    $"volume={Number(req.MusicGain)},{limiter}{audioFade}",
                     "-map",
                     $"{m}:a",
                 ]);
@@ -299,9 +314,9 @@ public class RenderWorker(
                 req.Duration.ToString(CultureInfo.InvariantCulture),
                 "-shortest",
                 "-c:v",
-                hasCaptions ? "libx264" : "copy",
+                videoFilters.Count > 0 ? "libx264" : "copy",
             ]);
-            if (hasCaptions)
+            if (videoFilters.Count > 0)
                 final.AddRange([
                     "-threads",
                     "2",

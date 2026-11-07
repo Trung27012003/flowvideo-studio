@@ -31,7 +31,10 @@ public record StoryDocument(
     bool AutoCaptions = true,
     int Resolution = 720,
     double VoiceGain = 1,
-    double MusicGain = .18
+    double MusicGain = .18,
+    string Fit = "contain",
+    double FadeSeconds = 0,
+    bool DuckMusic = false
 );
 
 public record SaveDocument(int Version, StoryDocument Document);
@@ -162,7 +165,10 @@ public static class Storyboard
                     AutoCaptions: document.AutoCaptions,
                     Resolution: document.Resolution,
                     VoiceGain: document.VoiceGain,
-                    MusicGain: document.MusicGain
+                    MusicGain: document.MusicGain,
+                    Fit: document.Fit,
+                    FadeSeconds: document.FadeSeconds,
+                    DuckMusic: document.DuckMusic
                 );
                 var job = new RenderJob
                 {
@@ -206,6 +212,9 @@ public static class Storyboard
             || doc.Script is null
             || doc.Script.Length > 50000
             || doc.Ratio is not ("9:16" or "16:9")
+            || doc.Fit is not ("contain" or "cover")
+            || !double.IsFinite(doc.FadeSeconds)
+            || doc.FadeSeconds is < 0 or > 2
             || doc.Resolution is not (720 or 1080)
             || !double.IsFinite(doc.VoiceGain)
             || doc.VoiceGain is < 0 or > 2

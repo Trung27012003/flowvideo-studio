@@ -212,3 +212,33 @@ input[type='range'] {
   padding: 0;
   accent-color: #4be0c0;
 }
+
+.batch-tools {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid #334155;
+  border-radius: 12px;
+}
+.batch-tools summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+.batch-tools button {
+  margin: 0.25rem;
+}
+.batch-tools input {
+  max-width: 100%;
+}
+.scene-head {
+  flex-wrap: wrap;
+}
+dl {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 0.4rem;
+}
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
