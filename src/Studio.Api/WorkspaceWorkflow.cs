@@ -312,7 +312,9 @@ public static class WorkspaceWorkflow
                         ),
                         missingFiles = assets.Count(a => !File.Exists(store.AssetPath(a))),
                         scenes = doc.Scenes!.Length,
-                        duration = doc.Scenes.Sum(s => s.Duration),
+                        duration = doc
+                            .Scenes.Where(s => s.Options?.Enabled != false)
+                            .Sum(s => s.Duration),
                         version = saved?.Version ?? 0,
                         jobs,
                         checkpoints = await db.SavedWorkspaceItems.CountAsync(
@@ -354,9 +356,9 @@ public static class WorkspaceWorkflow
                     var issues = new List<PreflightIssue>();
                     var durations = new Dictionary<Guid, double>();
                     var validImages = new HashSet<Guid>();
-                    if (doc.Scenes!.Length == 0)
+                    if (!doc.Scenes!.Any(s => s.Options?.Enabled != false))
                         issues.Add(new("error", "Chưa có cảnh."));
-                    foreach (var scene in doc.Scenes)
+                    foreach (var scene in doc.Scenes!.Where(s => s.Options?.Enabled != false))
                     {
                         if (
                             scene.AssetId is not Guid aid
@@ -378,7 +380,10 @@ public static class WorkspaceWorkflow
                                     );
                                 if (scene.Start >= duration)
                                     issues.Add(new("error", "Điểm vào nằm ngoài video.", scene.Id));
-                                else if (scene.Start + scene.Duration > duration + .05)
+                                else if (
+                                    scene.Start + scene.Duration * (scene.Options?.Speed ?? 1)
+                                    > duration + .05
+                                )
                                     issues.Add(
                                         new(
                                             "warning",
@@ -443,7 +448,8 @@ public static class WorkspaceWorkflow
                                 kind == "voice"
                                 && duration / (doc.Effects?.VoiceSpeed ?? 1)
                                     + (doc.Effects?.VoiceDelay ?? 0)
-                                    > doc.Scenes.Sum(s => s.Duration) + .1
+                                    > doc.Scenes!.Where(s => s.Options?.Enabled != false)
+                                        .Sum(s => s.Duration) + .1
                             )
                                 issues.Add(
                                     new("warning", "Giọng dài hơn storyboard; phần dư sẽ bị cắt.")
@@ -456,7 +462,7 @@ public static class WorkspaceWorkflow
                     }
                     if (
                         doc.VoiceId is null
-                        && doc.Scenes.Any(s => !string.IsNullOrWhiteSpace(s.Narration))
+                        && doc.Scenes!.Any(s => !string.IsNullOrWhiteSpace(s.Narration))
                     )
                         issues.Add(
                             new(

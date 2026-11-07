@@ -103,6 +103,37 @@ with tempfile.TemporaryDirectory(prefix='flowvideo-smoke-') as folder:
             corner=pixel_at(oriented,.3,320,180);assert corner[2]>150 and corner[0]<40,tuple(corner)
             assert next(s for s in probe(oriented)['streams'] if s['codec_type']=='video')['r_frame_rate']=='24/1'
             print('PASS effects: color correction/grayscale, background, 24/60 fps, quality modes, rotate+flip, sharpen/vignette, voice delay/speed/loudnorm and mono')
+            # v0.10 local scene controls must affect pixels, not just the saved recipe.
+            ffmpeg('-f','lavfi','-i','color=c=red:s=320x240:d=1','-f','lavfi','-i','color=c=blue:s=320x240:d=1','-filter_complex','[0:v][1:v]concat=n=2:v=1:a=0[v]','-map','[v]','-c:v','libx264','-pix_fmt','yuv420p',str(folder/'speed-colors.mp4'))
+            speed_colors=upload(p,folder/'speed-colors.mp4')['id']
+            tests=[('speed',[{'assetId':speed_colors,'duration':1,'options':{'speed':2}}]),('local-color',[{'assetId':clip,'duration':1,'options':{'brightness':-.3}},{'assetId':clip,'duration':1,'options':{'brightness':.3}}]),('local-fade',[{'assetId':clip,'duration':1,'options':{'fade':.4}}])]
+            local={}
+            for label,scenes in tests:
+                job=request(f'/projects/{p}/renders',{'assetIds':[s['assetId'] for s in scenes],'scenes':scenes,'duration':len(scenes),'ratio':'16:9'});wait_job(p,job)
+                output=folder/(label+'.mp4');urllib.request.urlretrieve(BASE+f'/jobs/{job["id"]}/download',output);local[label]=output
+            assert pixel_at(local['speed'],.2,640,360)[0]>180 and pixel_at(local['speed'],.7,640,360)[2]>180
+            assert sum(pixel_at(local['local-color'],1.5,640,360))-sum(pixel_at(local['local-color'],.5,640,360))>150
+            assert max(pixel_at(local['local-fade'],0,640,360))<10 and pixel_at(local['local-fade'],.5,640,360)[1]>80 and max(pixel_at(local['local-fade'],.96,640,360))<30
+            ffmpeg('-f','lavfi','-i','color=c=red:s=320x240:d=1','-vf','drawbox=x=160:y=0:w=160:h=240:c=blue:t=fill','-c:v','libx264','-pix_fmt','yuv420p',str(folder/'focus.mp4'))
+            focus=upload(p,folder/'focus.mp4')['id'];scenes=[{'assetId':focus,'duration':1,'options':{'fit':'cover','zoom':1.2,'focusX':x}} for x in [0,1]]
+            job=request(f'/projects/{p}/renders',{'assetIds':[focus,focus],'scenes':scenes,'duration':2,'ratio':'9:16'});wait_job(p,job)
+            focused=folder/'focused.mp4';urllib.request.urlretrieve(BASE+f'/jobs/{job["id"]}/download',focused)
+            assert pixel_at(focused,.5,360,640)[0]>180 and pixel_at(focused,1.5,360,640)[2]>180
+            def caption_pixels(file):
+                raw=subprocess.check_output(['ffmpeg','-hide_banner','-loglevel','error','-ss','0.5','-i',str(file),'-frames:v','1','-f','rawvideo','-pix_fmt','rgb24','pipe:1'])
+                red=[];green=0
+                for i in range(0,len(raw),3):
+                    r,g,b=raw[i:i+3]
+                    if r>170 and g<70 and b<70:red.append((i//3)//1280)
+                    if g>180 and r<70 and b<70:green+=1
+                return red,green
+            for alignment in [8,2]:
+                job=request(f'/projects/{p}/renders',{'assetIds':[clip],'duration':1,'ratio':'16:9','subtitleId':sub,'captions':{'size':28,'font':'mono','color':'#ff0000','outline':0,'shadow':0,'bold':True,'alignment':alignment,'margin':10}});wait_job(p,job)
+                output=folder/('caption-'+str(alignment)+'.mp4');urllib.request.urlretrieve(BASE+f'/jobs/{job["id"]}/download',output);red,_=caption_pixels(output)
+                assert len(red)>100 and (max(red)<360 if alignment==8 else min(red)>360),(alignment,len(red),min(red) if red else None)
+            job=request(f'/projects/{p}/renders',{'assetIds':[clip],'duration':1,'ratio':'16:9','subtitleId':sub,'captions':{'size':28,'box':True,'boxColor':'#00ff00','boxOpacity':1,'outline':3,'alignment':5}});wait_job(p,job)
+            boxed=folder/'boxed.mp4';urllib.request.urlretrieve(BASE+f'/jobs/{job["id"]}/download',boxed);_,green=caption_pixels(boxed);assert green>500,green
+            print('PASS scene speed/brightness/cache/fade/cover-focus/zoom and actual caption color, position, font/bold and background box pixels')
             # Trim must select the requested content, not just shorten the output.
             ffmpeg('-f','lavfi','-i','color=c=red:s=320x240:d=1','-f','lavfi','-i','color=c=blue:s=320x240:d=1','-filter_complex','[0:v][1:v]concat=n=2:v=1:a=0[v]','-map','[v]','-c:v','libx264','-pix_fmt','yuv420p',str(folder/'colors.mp4'))
             colors=upload(p,folder/'colors.mp4')['id']

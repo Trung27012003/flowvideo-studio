@@ -249,4 +249,10 @@ test("checkpoint comparison reports changed, removed, added scenes and settings"
   );
   assert(result.includes("thêm 1 cảnh, bỏ 1 cảnh, sửa 1 cảnh"));
   assert(result.includes("ratio"));
+  assert(
+    compareDocuments(
+      { scenes: [], captions: { color: "#fff" } },
+      { scenes: [], captions: { color: "#000" } },
+    ).includes("captions"),
+  );
 });

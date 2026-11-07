@@ -3,7 +3,8 @@
     <div>
       <h2>Storyboard của dự án</h2>
       <p>
-        {{ scenes().length }} cảnh · {{ total().toFixed(1) }} giây · bản đã lưu v{{ version() }}
+        {{ scenes().length }} cảnh ({{ activeCount() }} đang dùng) · {{ total().toFixed(1) }} giây ·
+        bản đã lưu v{{ version() }}
       </p>
     </div>
     <span class="hint">Nhớ lưu sau khi chỉnh sửa.</span>
@@ -11,6 +12,23 @@
   <fieldset [disabled]="disabled() || working()">
     <details class="batch-tools">
       <summary>Chọn nhiều cảnh & thời lượng theo lời</summary>
+      <div class="settings">
+        <label
+          >Nguồn cần thay<select aria-label="Nguồn cần thay" [(ngModel)]="replaceSource">
+            <option value="">Chọn tư liệu</option>
+            @for (a of media(); track a.id) {
+              <option [value]="a.id">{{ a.name }}</option>
+            }
+          </select></label
+        ><label
+          >Tư liệu thay thế<select aria-label="Tư liệu thay thế" [(ngModel)]="replaceTarget">
+            <option value="">Chọn tư liệu</option>
+            @for (a of media(); track a.id) {
+              <option [value]="a.id">{{ a.name }}</option>
+            }
+          </select></label
+        ><button (click)="replaceBindings()">Thay tư liệu trên mọi cảnh</button>
+      </div>
       <div class="actions">
         <button (click)="selectAllScenes()">Chọn tất cả cảnh</button
         ><button (click)="selection.set([])">Bỏ chọn cảnh</button
@@ -117,6 +135,11 @@
         nhạc khi có giọng storyboard</label
       >
     </div>
+    <app-caption-options
+      [(style)]="subtitleStyle"
+      context="Storyboard"
+      [disabled]="disabled() || working()"
+    />
     <app-render-options
       [(options)]="effects"
       context="Storyboard"
@@ -246,8 +269,17 @@
               ><button (click)="remove(scene.id)" aria-label="Xóa cảnh storyboard">Xóa</button>
             </div>
           </div>
+          <app-scene-options
+            (focusin)="beginEdit()"
+            (focusout)="endEdit()"
+            [options]="scene.options || defaultOptions()"
+            (optionsChange)="change(scene.id, { options: $event })"
+            [video]="video(scene.assetId)"
+            [disabled]="disabled() || working()"
+          />
           <label
             >Tên cảnh<input
+              aria-label="Tên cảnh"
               [ngModel]="scene.title"
               (focus)="beginEdit()"
               (blur)="endEdit()"
@@ -264,6 +296,7 @@
             }
             <label
               >Tư liệu của cảnh<select
+                aria-label="Tư liệu của cảnh"
                 [ngModel]="scene.assetId"
                 (ngModelChange)="change(scene.id, { assetId: $event })"
               >
@@ -301,6 +334,7 @@
           </div>
           <label
             >Lời của cảnh<textarea
+              aria-label="Lời của cảnh"
               [ngModel]="scene.narration"
               (focus)="beginEdit()"
               (blur)="endEdit()"
@@ -349,13 +383,13 @@
       ><button
         class="primary"
         (click)="render.emit()"
-        [disabled]="disabled() || !scenes().length || total() > 600"
+        [disabled]="disabled() || !activeCount() || total() > 600"
       >
         Lưu & dựng storyboard</button
       ><button
         class="secondary"
         (click)="renderVariants.emit()"
-        [disabled]="disabled() || !scenes().length || total() > 600"
+        [disabled]="disabled() || !activeCount() || total() > 600"
       >
         Dựng cả dọc và ngang
       </button>

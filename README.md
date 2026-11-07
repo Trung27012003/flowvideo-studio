@@ -6,7 +6,7 @@ Studio video cá nhân bằng **Angular 21 + ASP.NET Core / .NET 10 + FFmpeg**. 
 
 ![Giao diện FlowVideo Studio](docs/studio-preview.png)
 
-## Trạng thái v0.9
+## Trạng thái v0.10
 
 **Đã triển khai:** tạo/chọn dự án; nhập ảnh, video, audio, SRT; chọn và sắp xếp cảnh; cắt điểm vào/ra từng clip; ghép ảnh/video; loop trực tiếp một nguồn; thêm giọng đọc từ file và nhạc nền; burn-in SRT; hàng đợi, hủy job đang chờ/đang chạy, thử lại job lỗi; preview/tải MP4; tạo kịch bản, giọng đọc AI và phụ đề từ lời nói khi cấu hình API key; chỉnh sửa/lưu SRT không cần AI; lưu kịch bản và storyboard theo dự án; dựng theo thời lượng từng cảnh và tạo phụ đề từ lời cảnh; tạo ảnh AI theo prompt từng cảnh với hàng đợi, lịch sử và giới hạn lượt.
 
@@ -32,6 +32,12 @@ Tạo dự án → nhập media → chọn cảnh theo thứ tự → chỉnh đ
 Đặt biến môi trường `OPENAI_API_KEY` trong terminal chạy backend; `OPENAI_MODEL` mặc định `gpt-4o-mini`. Không đặt key trong Angular hay commit vào Git. File `.env.example` chỉ là mẫu; ứng dụng **không tự đọc `.env`**. Tạo kịch bản, giọng đọc và nhận diện phụ đề đều có thể phát sinh phí. `OPENAI_TTS_MODEL` mặc định `gpt-4o-mini-tts`; STT dùng `whisper-1` để lấy mốc thời gian. Cần model được tài khoản cho phép sử dụng.
 
 Bấm **Lưu kịch bản** để giữ nội dung theo dự án. Có thể chia các đoạn thành cảnh, chọn tư liệu và dựng bằng storyboard; Ảnh có thể tạo riêng bằng nút AI cho từng cảnh; chưa tự tạo toàn bộ tư liệu cho cả kịch bản.
+
+## Đợt 30 chức năng v0.10
+
+Thêm **10 tùy chỉnh riêng từng cảnh** (bật/tắt, vừa khung, sáng/xoay, speed/zoom/tâm, cue/fade và ghi chú), **10 tùy chỉnh kiểu phụ đề** và **10 công cụ thư viện** (copy qua dự án, hash file trùng, nơi dùng, tên hàng loạt, tạo/thay cảnh, yêu thích/nhãn/ghi chú/lọc).
+
+Danh sách đủ 30 mục, hướng dẫn và giới hạn: [BATCH-V10.md](docs/BATCH-V10.md). Mặc định JSON cũ tương thích; metadata bổ sung bảng AssetPreferences. Không cần API key, không thay file nguồn.
 
 ## Đợt 30 chức năng v0.9
 

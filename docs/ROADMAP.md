@@ -80,6 +80,13 @@
 - [x] Hai aspect ratio từ cùng snapshot, repeat Succeeded, queue stats/search.
 - [x] Danh sách đủ 30 mục: [BATCH-V09](BATCH-V09.md).
 
+## V0.10 — đợt 30 chức năng đã bổ sung
+
+- [x] 10 tùy chỉnh riêng cảnh: enabled, fit, brightness, rotation, speed, zoom/focus, caption, fade và note.
+- [x] 10 tùy chỉnh phụ đề: font, size, color/outline, shadow, bold, position/margin và box.
+- [x] 10 công cụ thư viện: copy/hash/usage/bulk rename/tạo-thay cảnh và metadata yêu thích/nhãn/ghi chú/lọc.
+- [x] Kiểm tra pixel và luồng UI/JSON thực tế; [danh sách đủ 30 mục](BATCH-V10.md).
+
 ## Tiếp theo — chất lượng nền tảng (2–3 tuần)
 
 - ffprobe kiểm tra file ngay sau upload; duration, thumbnail, waveform

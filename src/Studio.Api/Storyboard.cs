@@ -18,7 +18,8 @@ public record StoryScene(
     string Prompt,
     Guid? AssetId,
     double Duration = 5,
-    double Start = 0
+    double Start = 0,
+    SceneOptions? Options = null
 );
 
 public record StoryDocument(
@@ -35,7 +36,8 @@ public record StoryDocument(
     string Fit = "contain",
     double FadeSeconds = 0,
     bool DuckMusic = false,
-    RenderEffects? Effects = null
+    RenderEffects? Effects = null,
+    CaptionStyle? Captions = null
 );
 
 public record SaveDocument(int Version, StoryDocument Document);
@@ -172,7 +174,14 @@ public static class Storyboard
     internal static RenderRequest CreateRequest(StoryDocument document)
     {
         var clips = document
-            .Scenes!.Select(s => new SceneClip(s.AssetId!.Value, s.Duration, s.Start, s.Narration))
+            .Scenes!.Where(s => s.Options?.Enabled != false)
+            .Select(s => new SceneClip(
+                s.AssetId!.Value,
+                s.Duration,
+                s.Start,
+                s.Narration,
+                s.Options
+            ))
             .ToArray();
         return new RenderRequest(
             clips.Select(c => c.AssetId).ToArray(),
@@ -188,7 +197,8 @@ public static class Storyboard
             Fit: document.Fit,
             FadeSeconds: document.FadeSeconds,
             DuckMusic: document.DuckMusic,
-            Effects: document.Effects
+            Effects: document.Effects,
+            Captions: document.Captions
         );
     }
 
@@ -208,6 +218,8 @@ public static class Storyboard
         CancellationToken ct
     )
     {
+        if (doc.Captions is not null && !doc.Captions.Valid())
+            return "Kiểu phụ đề không hợp lệ.";
         if (doc.Effects is not null && !doc.Effects.Valid())
             return "Thông số hiệu chỉnh video/audio không hợp lệ.";
         if (
@@ -228,11 +240,12 @@ public static class Storyboard
             || doc.Scenes.Length > 30
         )
             return "Kịch bản/ý tưởng quá dài, tỉ lệ sai hoặc quá 30 cảnh.";
-        if (render && doc.Scenes.Length == 0)
+        if (render && !doc.Scenes.Any(s => s is not null && s.Options?.Enabled != false))
             return "Thêm ít nhất một cảnh trước khi dựng.";
         if (
             doc.Scenes.Any(s =>
                 s is null
+                || (s.Options is not null && !s.Options.Valid())
                 || s.Id == Guid.Empty
                 || s.Title is null
                 || s.Title.Length > 120
@@ -251,7 +264,7 @@ public static class Storyboard
             || doc.Scenes.Sum(s => s.Duration) > 600
         )
             return "Cảnh không hợp lệ: tối đa 30 cảnh, tổng 600 giây, thời lượng mỗi cảnh từ 0,1 giây và điểm vào không âm.";
-        if (render && doc.Scenes.Any(s => s.AssetId is null))
+        if (render && doc.Scenes.Any(s => s.Options?.Enabled != false && s.AssetId is null))
             return "Chọn ảnh/video cho tất cả các cảnh trước khi dựng.";
         var ids = doc
             .Scenes.Where(s => s.AssetId.HasValue)
@@ -269,7 +282,7 @@ public static class Storyboard
                 && (
                     !assets.TryGetValue(id, out var a)
                     || a.Kind is not ("image" or "video")
-                    || (a.Kind == "image" && s.Start != 0)
+                    || (a.Kind == "image" && (s.Start != 0 || (s.Options?.Speed ?? 1) != 1))
                 )
             )
             || new[] { doc.VoiceId, doc.MusicId }

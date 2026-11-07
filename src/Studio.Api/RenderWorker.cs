@@ -141,7 +141,8 @@ public class RenderWorker(
         try
         {
             var parts = new List<string>();
-            var cache = new Dictionary<(Guid, double, double), (string File, double Duration)>();
+            var cache =
+                new Dictionary<(Guid, double, double, string), (string File, double Duration)>();
             var durations = new Dictionary<Guid, double>();
             double remaining = req.Duration;
             var captions = new List<SubtitleCue>();
@@ -150,6 +151,7 @@ public class RenderWorker(
             {
                 var id = req.AssetIds[index];
                 var scene = req.Scenes?[index];
+                var options = scene?.Options ?? new SceneOptions();
                 ct.ThrowIfCancellationRequested();
                 if (remaining < 1.0 / 60)
                     break;
@@ -169,9 +171,22 @@ public class RenderWorker(
                     || (cut?.End is double end && end > sourceDuration + 0.05)
                 )
                     throw new IOException("Trim is outside source duration.");
-                var available = Math.Min(cut?.End ?? sourceDuration, sourceDuration) - start;
+                var available =
+                    (Math.Min(cut?.End ?? sourceDuration, sourceDuration) - start) / options.Speed;
                 var take = Math.Min(remaining, scene?.Duration ?? available);
-                var key = (id, start, take);
+                var key = (
+                    id,
+                    start,
+                    take,
+                    JsonSerializer.Serialize(
+                        options with
+                        {
+                            Enabled = true,
+                            Caption = true,
+                            Note = "",
+                        }
+                    )
+                );
                 if (!cache.TryGetValue(key, out var normalized))
                 {
                     var part = $"part{cache.Count}.mp4";
@@ -187,9 +202,27 @@ public class RenderWorker(
                         args.AddRange(["-loop", "1"]);
                     if (start > 0)
                         args.AddRange(["-ss", Number(start)]);
-                    var filter = effects.VideoFilter(w, h, req.Fit);
+                    var localEffects = effects with
+                    {
+                        Brightness = options.Brightness ?? effects.Brightness,
+                        Rotation = options.Rotation ?? effects.Rotation,
+                    };
+                    var filter = localEffects.VideoFilter(
+                        w,
+                        h,
+                        options.Fit == "inherit" ? req.Fit : options.Fit,
+                        options.FocusX,
+                        options.FocusY,
+                        options.Zoom
+                    );
+                    if (options.Speed != 1)
+                        filter = $"setpts=(PTS-STARTPTS)/{Number(options.Speed)}," + filter;
                     if (scene is not null && a.Kind == "video")
                         filter += $",tpad=stop_mode=clone:stop_duration={Number(take)}";
+                    var localFade = Math.Min(options.Fade, take / 2);
+                    if (localFade > 0)
+                        filter +=
+                            $",fade=t=in:st=0:d={Number(localFade)},fade=t=out:st={Number(take - localFade)}:d={Number(localFade)}";
                     args.AddRange([
                         "-i",
                         store.AssetPath(a),
@@ -218,7 +251,11 @@ public class RenderWorker(
                 }
                 parts.Add(normalized.File);
                 var actual = Math.Min(remaining, normalized.Duration);
-                if (req.AutoCaptions && !string.IsNullOrWhiteSpace(scene?.Caption))
+                if (
+                    req.AutoCaptions
+                    && options.Caption
+                    && !string.IsNullOrWhiteSpace(scene?.Caption)
+                )
                     captions.Add(
                         new(
                             elapsed,
@@ -284,7 +321,9 @@ public class RenderWorker(
             var videoFilters = new List<string>();
             if (hasCaptions)
                 videoFilters.Add(
-                    "subtitles=captions.srt:force_style='FontName=DejaVu Sans,FontSize=18,MarginV=36'"
+                    "subtitles=captions.srt:force_style='"
+                        + (req.Captions ?? new CaptionStyle()).FilterStyle()
+                        + "'"
                 );
             if (fade > 0)
                 videoFilters.Add(

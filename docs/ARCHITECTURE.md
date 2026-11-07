@@ -1,4 +1,4 @@
-# Kiến trúc v0.9
+# Kiến trúc v0.10
 
 Angular → HTTP API ASP.NET Core → EF Core SQLite; BackgroundService đọc job queued và gọi FFmpeg. Browser polling theo tải: 2,5 giây khi active, 15 giây khi idle, 30 giây khi lỗi; không gửi khi tab ẩn. Mỗi vòng đợi request hoàn tất trước khi hẹn lần sau; version guard tránh phản hồi cũ ghi đè dự án mới. File dùng ID sinh bởi server, không dùng tên upload làm đường dẫn. FFmpeg arguments được truyền bằng ArgumentList, không qua shell.
 
@@ -96,3 +96,14 @@ Preflight dùng ffprobe với gate hai request, timeout tổng 30 giây; đọc 
 Storyboard.CreateRequest() là đường dựng snapshot chung. Render-variants lưu hai request khác Ratio trong một SaveChanges transaction; worker vẫn FIFO. Duplicate job chỉ nhận Succeeded, giữ nguyên RequestJson và tạo ID mới, không sửa source job. Điều chỉnh draft sau intake không ảnh hưởng các job này.
 
 Scene multi-select dùng ID; batch mutations qua commit/undo bounded 20 bước. Reading durations và Fisher–Yates là utility thuần, không đổi asset hoặc gọi TTS. SRT parser có chế độ không ép thứ tự chỉ cho action sort; mọi kết quả ghi lại phải qua validation strict. Timeline table là snapshot, giới hạn 200 rows.
+
+
+## Scene/style/library v0.10
+
+StoryScene/SceneClip có SceneOptions optional. CreateRequest bỏ cảnh disabled trước tính duration/asset IDs; intake document vẫn kiểm tra toàn bộ cấu hình/reference, render yêu cầu ít nhất một cảnh bật và binding đầy đủ cho cảnh bật. Options chứa fit/brightness/rotation/speed/zoom/focus/caption/fade/note. Speed dùng setpts trước normalize, duration cảnh vẫn là output budget; cache key có các options hình để không reuse sai; bỏ note/caption/enabled khỏi key vì chúng không đổi hình normalize. Cover crop có tâm, zoom crop làm tròn kích thước chẵn rồi scale; tpad/fade sau normalize. Split UI quy đổi offset nguồn theo speed.
+
+CaptionStyle optional trong document/request, shared Angular CaptionOptions cho Studio/Storyboard. Record giới hạn font enum, hex color và numeric bounds; FilterStyle tạo force_style ASS với BGR/alpha, position và box. Lưới ASS 1–9 được ánh xạ sang mã SSA legacy mà force_style của FFmpeg sử dụng. Cấu hình theo JSON/preset/checkpoint/snapshot; SRT tải riêng không mang style. Legacy null dùng default tương đương font/size/margin/style trước đó.
+
+LibraryTools bổ sung AssetPreferences (AssetId PK/FK, Favorite, TagsJson, Note), upgrade CREATE IF NOT EXISTS. Upsert SQL parameterized đảm bảo không có race insert/update cùng ID; last-write wins. Copy chọn project khác, giới hạn 20 file/100 MiB, GUID/file độc lập, copy metadata và cleanup khi DB commit lỗi. Hash SHA-256 đọc streaming, timeout 30s, không xóa. Bulk rename SaveChanges transaction, giữ extension/StoredName. Usage đọc document/checkpoints/job requests, không draft.
+
+Frontend SceneOptionsEditor dùng focusin/out để gom lịch sử chỉnh một ô; image binding reset speed 1. Metadata/library filters là signals, asset IDs giữ ổn định qua rename. Tạo cảnh từ tập chọn thêm draft, thay source A→B giữ nội dung và reset start. Không thêm upstream AI hoặc dependency runtime.

@@ -49,7 +49,14 @@ public record RenderEffects(
     private static string N(double value) =>
         value.ToString("0.#########", CultureInfo.InvariantCulture);
 
-    public string VideoFilter(int w, int h, string fit)
+    public string VideoFilter(
+        int w,
+        int h,
+        string fit,
+        double focusX = .5,
+        double focusY = .5,
+        double zoom = 1
+    )
     {
         var filters = new List<string>();
         if (Rotation == 90)
@@ -71,9 +78,15 @@ public record RenderEffects(
             );
         filters.Add(
             fit == "cover"
-                ? $"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}"
+                ? $"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}:(iw-ow)*{N(focusX)}:(ih-oh)*{N(focusY)}"
                 : $"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=0x{Background[1..]}"
         );
+        if (zoom > 1)
+        {
+            var cw = Math.Max(2, (int)(w / zoom) / 2 * 2);
+            var ch = Math.Max(2, (int)(h / zoom) / 2 * 2);
+            filters.Add($"crop={cw}:{ch}:(iw-ow)*{N(focusX)}:(ih-oh)*{N(focusY)},scale={w}:{h}");
+        }
         filters.Add($"setsar=1,fps={Fps}");
         if (Sharpen > 0)
             filters.Add($"unsharp=5:5:{N(Sharpen)}:5:5:0");

@@ -45,10 +45,17 @@ public record RenderRequest(
     string Fit = "contain",
     double FadeSeconds = 0,
     bool DuckMusic = false,
-    RenderEffects? Effects = null
+    RenderEffects? Effects = null,
+    CaptionStyle? Captions = null
 );
 
-public record SceneClip(Guid AssetId, double Duration, double Start = 0, string Caption = "");
+public record SceneClip(
+    Guid AssetId,
+    double Duration,
+    double Start = 0,
+    string Caption = "",
+    SceneOptions? Options = null
+);
 
 public record ClipTrim(Guid AssetId, double Start = 0, double? End = null);
 
@@ -58,6 +65,7 @@ public record ScriptRequest(string Idea);
 
 public class StudioDb(DbContextOptions<StudioDb> options) : DbContext(options)
 {
+    public DbSet<AssetPreference> AssetPreferences => Set<AssetPreference>();
     public DbSet<SavedWorkspaceItem> SavedWorkspaceItems => Set<SavedWorkspaceItem>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<Asset> Assets => Set<Asset>();
@@ -67,6 +75,11 @@ public class StudioDb(DbContextOptions<StudioDb> options) : DbContext(options)
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<AssetPreference>().HasKey(x => x.AssetId);
+        b.Entity<AssetPreference>()
+            .HasOne<Asset>()
+            .WithOne()
+            .HasForeignKey<AssetPreference>(x => x.AssetId);
         b.Entity<SavedWorkspaceItem>().HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId);
         b.Entity<SavedWorkspaceItem>().HasIndex(x => new { x.ProjectId, x.Kind });
         b.Entity<ImageGeneration>().HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId);

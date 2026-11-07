@@ -1,3 +1,5 @@
+import { CaptionOptions, defaultCaptionStyle } from './caption-options';
+import { SceneOptionsEditor, SceneOptions, defaultSceneOptions } from './scene-options';
 import { RenderOptions, defaultEffects } from './render-options';
 import { scaleDurations, readingDurations, shuffled } from './creator-utils';
 import { Component, computed, input, model, output, signal } from '@angular/core';
@@ -23,10 +25,11 @@ export interface SceneDraft {
   assetId: string | null;
   duration: number;
   start: number;
+  options?: SceneOptions | null;
 }
 @Component({
   selector: 'app-storyboard',
-  imports: [FormsModule, RenderOptions],
+  imports: [FormsModule, RenderOptions, SceneOptionsEditor, CaptionOptions],
   templateUrl: './storyboard.html',
   styleUrl: './storyboard.scss',
 })
@@ -36,6 +39,33 @@ export class StoryboardEditor {
   voiceId = model('');
   musicId = model('');
   autoCaptions = model(true);
+  subtitleStyle = model(defaultCaptionStyle());
+  activeCount = computed(() => this.scenes().filter((s) => s.options?.enabled !== false).length);
+  defaultOptions = defaultSceneOptions;
+  replaceSource = '';
+  replaceTarget = '';
+  replaceBindings() {
+    if (!this.replaceSource || !this.replaceTarget || this.replaceSource === this.replaceTarget) {
+      this.actionError.set('Chọn hai tư liệu khác nhau.');
+      return;
+    }
+    this.commit((s) =>
+      s.map((c) =>
+        c.assetId === this.replaceSource
+          ? {
+              ...c,
+              assetId: this.replaceTarget,
+              start: 0,
+              options: {
+                ...defaultSceneOptions(),
+                ...c.options,
+                speed: this.video(this.replaceTarget) ? (c.options?.speed ?? 1) : 1,
+              },
+            }
+          : c,
+      ),
+    );
+  }
   resolution = model(720);
   voiceGain = model(1);
   musicGain = model(0.18);
@@ -183,9 +213,18 @@ export class StoryboardEditor {
         if (!assets.length) throw new Error('Thêm ảnh hoặc video vào thư viện trước.');
         let i = 0;
         this.commit((s) =>
-          s.map((c) =>
-            c.assetId ? c : { ...c, assetId: assets[i++ % assets.length].id, start: 0 },
-          ),
+          s.map((c) => {
+            if (c.assetId) return c;
+            const asset = assets[i++ % assets.length];
+            return {
+              ...c,
+              assetId: asset.id,
+              start: 0,
+              ...(asset.kind === 'image'
+                ? { options: { ...defaultSceneOptions(), ...c.options, speed: 1 } }
+                : {}),
+            };
+          }),
         );
       } else if (action === 'replace') {
         if (!this.findText) throw new Error('Nhập lời cần tìm.');
@@ -222,7 +261,10 @@ export class StoryboardEditor {
         });
         if (!response.ok) throw new Error('Không đọc được thời lượng nguồn để tách.');
         const metadata = await response.json();
-        if (!Number.isFinite(metadata.duration) || scene.start + half >= metadata.duration)
+        if (
+          !Number.isFinite(metadata.duration) ||
+          scene.start + half * (scene.options?.speed ?? 1) >= metadata.duration
+        )
           throw new Error(
             'Điểm tách nằm trong phần giữ khung cuối. Hãy chọn điểm vào hoặc thời lượng ngắn hơn.',
           );
@@ -238,7 +280,7 @@ export class StoryboardEditor {
                   id: crypto.randomUUID(),
                   title: c.title.slice(0, 110) + ' (phần 2)',
                   duration: Math.round((c.duration - half) * 1000) / 1000,
-                  start: this.video(c.assetId) ? c.start + half : 0,
+                  start: this.video(c.assetId) ? c.start + half * (c.options?.speed ?? 1) : 0,
                 },
               ],
         ),
@@ -302,7 +344,20 @@ export class StoryboardEditor {
   change(id: string, patch: Partial<SceneDraft>) {
     this.commit((list) =>
       list.map((s) =>
-        s.id === id ? { ...s, ...patch, ...('assetId' in patch ? { start: 0 } : {}) } : s,
+        s.id === id
+          ? {
+              ...s,
+              ...patch,
+              ...('assetId' in patch
+                ? {
+                    start: 0,
+                    ...(!this.video(patch.assetId ?? null)
+                      ? { options: { ...defaultSceneOptions(), ...s.options, speed: 1 } }
+                      : {}),
+                  }
+                : {}),
+            }
+          : s,
       ),
     );
   }

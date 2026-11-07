@@ -1,3 +1,5 @@
+import { CaptionOptions, defaultCaptionStyle } from './caption-options';
+import { defaultSceneOptions } from './scene-options';
 import { RenderOptions, defaultEffects } from './render-options';
 import {
   transformSrt,
@@ -39,7 +41,7 @@ interface Job {
 }
 @Component({
   selector: 'app-root',
-  imports: [FormsModule, StoryboardEditor, RenderOptions],
+  imports: [FormsModule, StoryboardEditor, RenderOptions, CaptionOptions],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -83,6 +85,19 @@ export class App implements OnInit, OnDestroy {
   libraryQuery = signal('');
   libraryKind = signal('all');
   librarySort = signal('name-asc');
+  assetPreferences = signal<any[]>([]);
+  favoritesOnly = signal(false);
+  libraryTag = signal('');
+  preferenceTags = '';
+  preferenceNote = '';
+  preferenceFavorite = false;
+  libraryReport = signal('');
+  copyTarget = '';
+  bulkPrefix = 'Clip-';
+  bulkSuffix = '';
+  bulkStart = 1;
+  captionStyle = signal(defaultCaptionStyle());
+  boardSubtitleStyle = signal(defaultCaptionStyle());
   librarySelected = signal<string[]>([]);
   metadata = signal<Record<string, unknown> | null>(null);
   renameProjectText = '';
@@ -154,6 +169,11 @@ export class App implements OnInit, OnDestroy {
       .filter(
         (a) =>
           (this.libraryKind() === 'all' || a.kind === this.libraryKind()) &&
+          (!this.favoritesOnly() || this.preference(a.id).favorite) &&
+          (!this.libraryTag().trim() ||
+            this.preference(a.id).tags.some((tag: string) =>
+              this.normalized(tag).includes(this.normalized(this.libraryTag().trim())),
+            )) &&
           this.normalized(a.name).includes(query),
       )
       .sort((a, b) => {
@@ -283,6 +303,13 @@ export class App implements OnInit, OnDestroy {
   async selectProject(id: string) {
     const version = ++this.projectVersion;
     this.projectId.set(id);
+    this.assetPreferences.set([]);
+    this.favoritesOnly.set(false);
+    this.libraryTag.set('');
+    this.libraryReport.set('');
+    this.copyTarget = '';
+    this.captionStyle.set(defaultCaptionStyle());
+    this.boardSubtitleStyle.set(defaultCaptionStyle());
     this.savedItems.set([]);
     this.comparison.set('');
     this.workflowReport.set('');
@@ -342,6 +369,7 @@ export class App implements OnInit, OnDestroy {
       this.refreshJobs(),
       this.refreshImages(),
       this.refreshSavedItems(),
+      this.refreshPreferences(),
       this.api('/projects/' + id + '/document').then((result) => {
         if (version !== this.projectVersion || this.destroyed) return;
         const doc = result.document;
@@ -453,6 +481,7 @@ export class App implements OnInit, OnDestroy {
           fadeSeconds: this.fadeSeconds,
           duckMusic: this.duckMusic,
           effects: this.effects(),
+          captions: this.captionStyle(),
           resolution: this.resolution,
           voiceGain: this.voiceVolume / 100,
           musicGain: this.musicVolume / 100,
@@ -564,6 +593,7 @@ export class App implements OnInit, OnDestroy {
       fadeSeconds: this.boardFade(),
       duckMusic: this.boardDuck(),
       effects: this.boardEffects(),
+      captions: this.boardSubtitleStyle(),
       resolution: this.boardResolution(),
       voiceGain: this.boardVoiceGain(),
       musicGain: this.boardMusicGain(),
@@ -581,6 +611,7 @@ export class App implements OnInit, OnDestroy {
     this.boardFade.set(doc.fadeSeconds ?? 0);
     this.boardDuck.set(doc.duckMusic ?? false);
     this.boardEffects.set({ ...defaultEffects(), ...doc.effects });
+    this.boardSubtitleStyle.set({ ...defaultCaptionStyle(), ...doc.captions });
     this.boardResolution.set(doc.resolution ?? 720);
     this.boardVoiceGain.set(doc.voiceGain ?? 1);
     this.boardMusicGain.set(doc.musicGain ?? 0.18);
@@ -598,6 +629,7 @@ export class App implements OnInit, OnDestroy {
       fadeSeconds: doc.fadeSeconds,
       duckMusic: doc.duckMusic,
       effects: doc.effects,
+      captions: doc.captions,
     });
   }
   async refreshSavedItems() {
@@ -832,6 +864,11 @@ export class App implements OnInit, OnDestroy {
   }
   async openAsset(asset: Asset) {
     this.assetPreview.set(asset);
+    const preference = this.preference(asset.id);
+    this.preferenceFavorite = preference.favorite;
+    this.preferenceTags = preference.tags.join(', ');
+    this.preferenceNote = preference.note;
+    this.libraryReport.set('');
     this.metadata.set(null);
     this.clearDerived();
     this.frameAt = 0;
@@ -1080,6 +1117,148 @@ export class App implements OnInit, OnDestroy {
         this.derivedPreview.set(this.derivedUrl);
       }
     });
+  }
+  preference(id: string): any {
+    return (
+      this.assetPreferences().find((p) => p.assetId === id) || {
+        assetId: id,
+        favorite: false,
+        tags: [],
+        note: '',
+      }
+    );
+  }
+  async refreshPreferences() {
+    const id = this.projectId();
+    const rows = await this.api('/projects/' + id + '/asset-preferences');
+    if (id === this.projectId()) this.assetPreferences.set(rows);
+  }
+  private async putPreference(id: string, preference: any) {
+    const saved = await this.api('/projects/' + this.projectId() + '/asset-preferences/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(preference),
+    });
+    this.assetPreferences.update((rows) => [...rows.filter((p) => p.assetId !== id), saved]);
+  }
+  async favoriteAsset(id: string) {
+    await this.perform(async () => {
+      const p = this.preference(id);
+      await this.putPreference(id, { ...p, favorite: !p.favorite });
+    });
+  }
+  async savePreference() {
+    const asset = this.assetPreview();
+    if (!asset) return;
+    await this.perform(async () => {
+      await this.putPreference(asset.id, {
+        favorite: this.preferenceFavorite,
+        tags: this.preferenceTags
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean),
+        note: this.preferenceNote,
+      });
+      this.notice.set('Đã lưu yêu thích, nhãn và ghi chú tư liệu.');
+    });
+  }
+  async assetUsage() {
+    const asset = this.assetPreview();
+    if (!asset) return;
+    await this.perform(async () => {
+      const usage = await this.api(
+        '/projects/' + this.projectId() + '/assets/' + asset.id + '/usage',
+      );
+      this.libraryReport.set(
+        'Bản đã lưu: ' +
+          usage.scenes.length +
+          ' cảnh · audio: ' +
+          (usage.audio ? 'có' : 'không') +
+          '\n' +
+          usage.scenes.map((s: any) => s.title + (s.enabled ? '' : ' (tắt)')).join(', ') +
+          '\n' +
+          usage.checkpoints.length +
+          ' mốc khôi phục · ' +
+          usage.jobCount +
+          ' job tham chiếu',
+      );
+    });
+  }
+  async copyAssets() {
+    await this.perform(async () => {
+      const result = await this.api('/projects/' + this.projectId() + '/assets/copy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assetIds: this.librarySelected(),
+          targetProjectId: this.copyTarget,
+        }),
+      });
+      this.notice.set(
+        'Đã sao chép ' + result.assets.length + ' file độc lập sang dự án đích, kèm nhãn/ghi chú.',
+      );
+    });
+  }
+  async findDuplicates() {
+    await this.perform(async () => {
+      const result = await this.api('/projects/' + this.projectId() + '/assets/duplicates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assetIds: this.librarySelected() }),
+      });
+      this.libraryReport.set(
+        'Đã kiểm tra ' +
+          result.checkedCount +
+          ' file: ' +
+          result.groups.length +
+          ' nhóm trùng byte.\n' +
+          result.groups.map((g: any) => g.assets.map((a: any) => a.name).join(' = ')).join('\n'),
+      );
+    });
+  }
+  async bulkRenameAssets() {
+    await this.perform(async () => {
+      const updated = await this.api('/projects/' + this.projectId() + '/assets/bulk-name', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assetIds: this.librarySelected(),
+          prefix: this.bulkPrefix,
+          suffix: this.bulkSuffix,
+          startNumber: this.bulkStart,
+        }),
+      });
+      this.assets.update((rows) => rows.map((a) => updated.find((b: Asset) => b.id === a.id) || a));
+      this.notice.set('Đã đổi tên ' + updated.length + ' file theo thứ tự chọn, giữ phần mở rộng.');
+    });
+  }
+  addSelectedScenes() {
+    const media = this.librarySelected()
+      .map((id) => this.assets().find((a) => a.id === id))
+      .filter((a): a is Asset => !!a && (a.kind === 'video' || a.kind === 'image'));
+    if (
+      !media.length ||
+      this.scenes().length + media.length > 30 ||
+      this.scenes().reduce((sum, s) => sum + s.duration, 0) + media.length * 5 > 600
+    ) {
+      this.error.set('Cần chọn ảnh/video; tối đa 30 cảnh và tổng 600 giây.');
+      return;
+    }
+    this.scenes.update((s) => [
+      ...s,
+      ...media.map((a, i) => ({
+        id: crypto.randomUUID(),
+        title: 'Cảnh ' + (s.length + i + 1),
+        narration: '',
+        prompt: '',
+        assetId: a.id,
+        duration: 5,
+        start: 0,
+        options: defaultSceneOptions(),
+      })),
+    ]);
+    this.tab.set('board');
+    this.notice.set('Đã thêm ' + media.length + ' cảnh từ tư liệu chọn. Bấm Lưu để giữ.');
   }
   async generateScript() {
     await this.perform(async () => {

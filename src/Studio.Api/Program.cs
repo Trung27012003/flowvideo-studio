@@ -30,6 +30,7 @@ using (var scope = app.Services.CreateScope())
     await Storyboard.Upgrade(db);
     await ImageFeatures.Upgrade(db);
     await WorkspaceWorkflow.Upgrade(db);
+    await LibraryTools.Upgrade(db);
     await db
         .Jobs.Where(x => x.Status == "Running")
         .ExecuteUpdateAsync(s =>
@@ -39,7 +40,7 @@ using (var scope = app.Services.CreateScope())
 }
 app.UseDefaultFiles();
 app.UseStaticFiles();
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.9.0" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.10.0" }));
 app.MapGet(
     "/api/capabilities",
     (IConfiguration c) =>
@@ -186,7 +187,8 @@ app.MapPost(
         if (!await db.Projects.AnyAsync(x => x.Id == id))
             return Results.NotFound();
         if (
-            (req.Effects is not null && !req.Effects.Valid())
+            (req.Captions is not null && !req.Captions.Valid())
+            || (req.Effects is not null && !req.Effects.Valid())
             || req.Fit is not ("contain" or "cover")
             || !double.IsFinite(req.FadeSeconds)
             || req.FadeSeconds is < 0 or > 2
@@ -252,6 +254,7 @@ app.MapPost(
                 || req.Scenes.Length != req.AssetIds.Length
                 || req.Scenes.Any(x =>
                     x is null
+                    || (x.Options is not null && (!x.Options.Valid() || !x.Options.Enabled))
                     || !double.IsFinite(x.Duration)
                     || x.Duration < .1
                     || x.Duration > 600
@@ -263,7 +266,8 @@ app.MapPost(
                 )
                 || !req.Scenes.Select(x => x.AssetId).SequenceEqual(req.AssetIds)
                 || req.Scenes.Any(x =>
-                    assets.Any(a => a.Id == x.AssetId && a.Kind == "image") && x.Start != 0
+                    assets.Any(a => a.Id == x.AssetId && a.Kind == "image")
+                    && (x.Start != 0 || (x.Options?.Speed ?? 1) != 1)
                 )
             )
         )
@@ -433,6 +437,7 @@ app.MapProjectTools();
 app.MapWorkspaceTools();
 app.MapMediaTools();
 app.MapWorkspaceWorkflow();
+app.MapLibraryTools();
 app.Map("/api/{**path}", () => Results.NotFound());
 app.MapFallbackToFile("index.html");
 static bool HasAudio(string json)

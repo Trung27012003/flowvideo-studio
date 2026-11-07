@@ -10,6 +10,22 @@ const { chromium } = require(
   path.join(root, "src/Studio.Web/node_modules/playwright"),
 );
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function waitForJobs(page, project, predicate) {
+  const deadline = Date.now() + 120000;
+  let last = [];
+  while (Date.now() < deadline) {
+    const response = await page.request.get(
+      "http://127.0.0.1:5099/api/projects/" + project + "/jobs",
+    );
+    assert.equal(response.status(), 200);
+    last = await response.json();
+    assert(!last.some((j) => j.status === "Failed"), JSON.stringify(last));
+    if (predicate(last)) return last;
+    await delay(250);
+  }
+  throw new Error("Jobs did not reach expected state: " + JSON.stringify(last));
+}
+
 (async () => {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), "flowvideo-browser-"));
   let server,
@@ -715,8 +731,9 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     await board.getByRole("button", { name: "Thay lời hàng loạt" }).click();
     await page.waitForFunction(
       () =>
-        document.querySelector("app-storyboard .scene textarea").value ===
-        "Xin chào bạn sáng tạo",
+        document.querySelector(
+          "app-storyboard .scene textarea[aria-label='Lời của cảnh']",
+        ).value === "Xin chào bạn sáng tạo",
     );
     assert.equal(
       await board
@@ -781,7 +798,7 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     await board.getByRole("button", { name: "Điền tư liệu còn thiếu" }).click();
     await page.waitForFunction(() =>
       Array.from(
-        document.querySelectorAll("app-storyboard .scene select"),
+        document.querySelectorAll("app-storyboard .scene .scene-media select"),
       ).every(
         (x) => x.value !== "" && x.value !== "null" && x.value !== "0: null",
       ),
@@ -1129,7 +1146,7 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     await page.waitForFunction(
       (title) =>
         document.querySelector(
-          "app-storyboard .scene input:not([type=checkbox])",
+          "app-storyboard .scene input[aria-label='Tên cảnh']",
         )?.value === title,
       checkpointTitle,
     );
@@ -1169,8 +1186,9 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       .click();
     await page.waitForFunction(
       () =>
-        document.querySelector("app-storyboard .scene textarea")?.value ===
-        "Giữ lời khi áp preset",
+        document.querySelector(
+          "app-storyboard .scene textarea[aria-label='Lời của cảnh']",
+        )?.value === "Giữ lời khi áp preset",
     );
     await board.locator("app-render-options summary").click();
     await page.waitForFunction(() =>
@@ -1273,7 +1291,7 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     await page.waitForFunction(
       (title) =>
         document.querySelector(
-          "app-storyboard .scene:last-child input:not([type=checkbox])",
+          "app-storyboard .scene:last-child input[aria-label='Tên cảnh']",
         )?.value === title,
       checkpointTitle,
     );
@@ -1287,7 +1305,7 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     await page.waitForFunction(
       (title) =>
         document.querySelector(
-          "app-storyboard .scene input:not([type=checkbox])",
+          "app-storyboard .scene input[aria-label='Tên cảnh']",
         )?.value === title,
       checkpointTitle,
     );
@@ -1320,7 +1338,7 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     await page.waitForFunction(
       () =>
         document.querySelectorAll(
-          "app-storyboard .scene input[type=checkbox]:checked",
+          "app-storyboard .scene input[aria-label^='Chọn cảnh ']:checked",
         ).length === 3,
     );
     await board
@@ -1342,15 +1360,11 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       .getByRole("heading", { name: "Hàng đợi render", exact: true })
       .waitFor();
     await page.getByLabel("Lọc trạng thái render").selectOption("all");
-    await page.waitForFunction(
-      async (id) => {
-        const jobs = await (
-          await fetch("/api/projects/" + id + "/jobs")
-        ).json();
-        return jobs.length === 3 && jobs.every((j) => j.status === "Succeeded");
-      },
+    await waitForJobs(
+      page,
       clonedProject,
-      { timeout: 120000 },
+      (jobs) =>
+        jobs.length === 3 && jobs.every((j) => j.status === "Succeeded"),
     );
     const afterVariants = await (
       await page.request.get(
@@ -1375,12 +1389,7 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       .getByRole("button", { name: "Dựng lại bản hoàn tất", exact: true })
       .first()
       .click();
-    await page.waitForFunction(
-      async (id) =>
-        (await (await fetch("/api/projects/" + id + "/jobs")).json()).length ===
-        4,
-      clonedProject,
-    );
+    await waitForJobs(page, clonedProject, (jobs) => jobs.length === 4);
     await page
       .getByLabel("Tìm tác vụ render", { exact: true })
       .fill("not-a-job");
@@ -1457,6 +1466,344 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       .click();
     console.log(
       "PASS v0.9 browser: checkpoint restore/compare/rename/export, preset save/apply/rename/import/export/delete, summary/preflight, scene multi-select/batch/export/reading timing/shuffle, 6 SRT tools, real dual-aspect renders/repeat, queue stats/search",
+    );
+    // v0.10: individual scene settings, styled captions and library reuse.
+    const firstScene = board.locator(".scene").first(),
+      lastScene = board.locator(".scene").last();
+    await firstScene.locator("app-scene-options summary").click();
+    await firstScene
+      .getByLabel("Vừa khung riêng", { exact: true })
+      .selectOption("cover");
+    await firstScene.getByLabel("Dùng độ sáng riêng", { exact: true }).check();
+    await firstScene.getByLabel("Độ sáng riêng", { exact: true }).fill("0.1");
+    await firstScene
+      .getByLabel("Xoay riêng", { exact: true })
+      .selectOption({ label: "180°" });
+    for (const [label, value] of [
+      ["Tốc độ hình cảnh", "2"],
+      ["Zoom riêng", "1.2"],
+      ["Tâm ngang cảnh (0–1)", "0"],
+      ["Tâm dọc cảnh (0–1)", "1"],
+      ["Fade riêng cảnh (s)", "0.2"],
+    ])
+      await firstScene.getByLabel(label, { exact: true }).fill(value);
+    await firstScene.getByLabel("Hiện phụ đề cảnh", { exact: true }).uncheck();
+    await firstScene
+      .getByLabel("Ghi chú sản xuất cảnh", { exact: true })
+      .fill("Ghi chú cảnh v10");
+    await lastScene.locator("app-scene-options summary").click();
+    await lastScene.getByLabel("Dùng cảnh khi dựng", { exact: true }).uncheck();
+    await lastScene
+      .getByLabel("Tư liệu của cảnh", { exact: true })
+      .selectOption({ label: "Chọn ảnh / video" });
+    await board.locator("app-caption-options summary").click();
+    await board
+      .getByLabel("Phông phụ đề · Storyboard", { exact: true })
+      .selectOption("mono");
+    for (const [label, value] of [
+      ["Cỡ chữ phụ đề", "24"],
+      ["Độ viền phụ đề", "2"],
+      ["Bóng chữ phụ đề", "1"],
+      ["Lề dọc phụ đề", "12"],
+      ["Độ đậm nền hộp", "0.8"],
+    ])
+      await board
+        .getByLabel(label + " · Storyboard", { exact: true })
+        .fill(value);
+    for (const [label, color] of [
+      ["Màu chữ phụ đề", "#ff0000"],
+      ["Màu viền phụ đề", "#0000ff"],
+      ["Màu nền hộp", "#000000"],
+    ])
+      await board
+        .getByLabel(label + " · Storyboard", { exact: true })
+        .evaluate((el, color) => {
+          el.value = color;
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+        }, color);
+    await board
+      .getByLabel("Vị trí phụ đề · Storyboard", { exact: true })
+      .selectOption({ label: "Trên giữa" });
+    await board
+      .getByLabel("Chữ đậm phụ đề · Storyboard", { exact: true })
+      .check();
+    await board
+      .getByLabel("Nền hộp phụ đề · Storyboard", { exact: true })
+      .check();
+    const beforeV10 = await (
+      await page.request.get(
+        "http://127.0.0.1:5099/api/projects/" + clonedProject + "/jobs",
+      )
+    ).json();
+    await board
+      .getByRole("button", { name: "Lưu & dựng storyboard", exact: true })
+      .click();
+    await page
+      .getByRole("heading", { name: "Hàng đợi render", exact: true })
+      .waitFor();
+    await waitForJobs(page, clonedProject, (jobs) =>
+      jobs.some(
+        (j) =>
+          !beforeV10.some((old) => old.id === j.id) && j.status === "Succeeded",
+      ),
+    );
+    const afterV10 = await (
+      await page.request.get(
+        "http://127.0.0.1:5099/api/projects/" + clonedProject + "/jobs",
+      )
+    ).json();
+    const styledJob = afterV10.find(
+      (j) => !beforeV10.some((old) => old.id === j.id),
+    );
+    const styledRecipe = await (
+      await page.request.get(
+        "http://127.0.0.1:5099/api/jobs/" + styledJob.id + "/recipe",
+      )
+    ).json();
+    assert.equal(styledRecipe.request.scenes.length, 2);
+    assert.equal(styledRecipe.request.scenes[0].options.speed, 2);
+    assert.equal(
+      styledRecipe.request.scenes[0].options.note,
+      "Ghi chú cảnh v10",
+    );
+    assert.equal(styledRecipe.request.scenes[0].options.caption, false);
+    assert.equal(styledRecipe.request.captions.font, "mono");
+    assert.equal(styledRecipe.request.captions.box, true);
+    assert.equal(styledRecipe.request.captions.color, "#ff0000");
+    const { parseSrt } = require("../src/Studio.Web/src/app/creator-utils.ts");
+    const srtResponse = await page.request.get(
+      "http://127.0.0.1:5099/api/jobs/" + styledJob.id + "/subtitles",
+    );
+    assert.equal(
+      srtResponse.status(),
+      200,
+      JSON.stringify({
+        status: styledJob.status,
+        autoCaptions: styledRecipe.request.autoCaptions,
+        scenes: styledRecipe.request.scenes,
+      }),
+    );
+    const styledCues = parseSrt(await srtResponse.text());
+    assert.equal(styledCues.length, 1);
+    assert.equal(styledCues[0].start, 1000);
+    await page
+      .getByRole("button", { name: "Thư viện media", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Xem trước Clip độc lập.mp4", exact: true })
+      .click();
+    const mediaPreferences = page.getByRole("dialog", {
+      name: "Xem trước tài nguyên",
+    });
+    await mediaPreferences
+      .getByLabel("Đánh dấu tư liệu yêu thích", { exact: true })
+      .check();
+    await mediaPreferences
+      .getByLabel("Nhãn tư liệu (cách bằng dấu phẩy)", { exact: true })
+      .fill("demo, Góc máy");
+    await mediaPreferences
+      .getByLabel("Ghi chú tư liệu", { exact: true })
+      .fill("Tư liệu dùng lại v10");
+    await mediaPreferences
+      .getByRole("button", { name: "Lưu thông tin tư liệu", exact: true })
+      .click();
+    await mediaPreferences
+      .getByRole("status")
+      .filter({ hasText: "Đã lưu yêu thích" })
+      .waitFor();
+    await mediaPreferences
+      .getByRole("button", { name: "Xem nơi dùng tư liệu", exact: true })
+      .click();
+    await mediaPreferences
+      .getByRole("status")
+      .filter({ hasText: "job tham chiếu" })
+      .waitFor();
+    await mediaPreferences
+      .getByRole("button", { name: "Đóng xem trước tài nguyên", exact: true })
+      .click();
+    await page.getByText("Công cụ tư liệu mở rộng", { exact: true }).click();
+    await page.getByLabel("Chỉ tư liệu yêu thích", { exact: true }).check();
+    await page.getByLabel("Lọc nhãn tư liệu", { exact: true }).fill("goc may");
+    await page.waitForFunction(
+      () => document.querySelectorAll(".library-card").length === 1,
+    );
+    await page
+      .getByRole("button", { name: "Yêu thích Clip độc lập.mp4", exact: true })
+      .click();
+    await page.waitForFunction(
+      () => document.querySelectorAll(".library-card").length === 0,
+    );
+    await page.getByLabel("Chỉ tư liệu yêu thích", { exact: true }).uncheck();
+    await page
+      .getByRole("button", { name: "Yêu thích Clip độc lập.mp4", exact: true })
+      .click();
+    await page.getByRole("button", { name: "Xóa bộ lọc", exact: true }).click();
+    await page.waitForFunction(
+      () => !document.querySelector("input[type=file][multiple]")?.disabled,
+    );
+    await page.locator("input[type=file][multiple]").setInputFiles(clip);
+    await page
+      .getByRole("button", { name: "Xem trước sample.mp4", exact: true })
+      .waitFor();
+    await page
+      .getByRole("button", { name: "Bỏ chọn media", exact: true })
+      .click();
+    await page
+      .getByLabel("Chọn media Clip độc lập.mp4", { exact: true })
+      .check();
+    await page.getByLabel("Chọn media sample.mp4", { exact: true }).check();
+    await page
+      .getByRole("button", { name: "Tìm file trùng byte", exact: true })
+      .click();
+    await page
+      .getByRole("status")
+      .filter({ hasText: "1 nhóm trùng byte" })
+      .waitFor();
+    const reusableAssets = await (
+      await page.request.get(
+        "http://127.0.0.1:5099/api/projects/" + clonedProject + "/assets",
+      )
+    ).json();
+    const sourceAsset = reusableAssets.find(
+        (a) => a.name === "Clip độc lập.mp4",
+      ),
+      replacementAsset = reusableAssets.find((a) => a.name === "sample.mp4");
+    assert(sourceAsset && replacementAsset);
+    await page
+      .getByLabel("Tiền tố tên hàng loạt", { exact: true })
+      .fill("Batch-");
+    await page
+      .getByLabel("Hậu tố tên hàng loạt", { exact: true })
+      .fill("-demo");
+    await page.getByLabel("Số bắt đầu tên", { exact: true }).fill("7");
+    await page
+      .getByRole("button", { name: "Đổi tên media hàng loạt", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Xem trước Batch-07-demo.mp4", exact: true })
+      .waitFor();
+    const targetBefore = await (
+      await page.request.get(
+        "http://127.0.0.1:5099/api/projects/" + importedProject + "/assets",
+      )
+    ).json();
+    await page
+      .getByLabel("Dự án đích sao chép", { exact: true })
+      .selectOption(importedProject);
+    await page
+      .getByRole("button", { name: "Sao chép media sang dự án", exact: true })
+      .click();
+    await page
+      .getByRole("status")
+      .filter({ hasText: "Đã sao chép 2 file độc lập" })
+      .waitFor();
+    const targetAfter = await (
+      await page.request.get(
+        "http://127.0.0.1:5099/api/projects/" + importedProject + "/assets",
+      )
+    ).json();
+    assert.equal(targetAfter.length, targetBefore.length + 2);
+    assert(
+      !targetAfter.some(
+        (a) => a.id === sourceAsset.id || a.id === replacementAsset.id,
+      ),
+    );
+    const copiedPreferences = await (
+      await page.request.get(
+        "http://127.0.0.1:5099/api/projects/" +
+          importedProject +
+          "/asset-preferences",
+      )
+    ).json();
+    assert(
+      copiedPreferences.some(
+        (p) => p.favorite && p.note === "Tư liệu dùng lại v10",
+      ),
+    );
+    await page
+      .getByRole("button", { name: "Tạo cảnh từ media đã chọn", exact: true })
+      .click();
+    await page.waitForFunction(
+      () => document.querySelectorAll("app-storyboard .scene").length === 5,
+    );
+    await board
+      .getByText("Chọn nhiều cảnh & thời lượng theo lời", { exact: true })
+      .click();
+    await board
+      .getByLabel("Nguồn cần thay", { exact: true })
+      .selectOption(sourceAsset.id);
+    const imageReplacement = reusableAssets.find((a) => a.kind === "image");
+    assert(imageReplacement);
+    await board
+      .getByLabel("Tư liệu thay thế", { exact: true })
+      .selectOption(imageReplacement.id);
+    await board
+      .getByRole("button", { name: "Thay tư liệu trên mọi cảnh", exact: true })
+      .click();
+    await board
+      .getByRole("button", { name: "Lưu storyboard", exact: true })
+      .click();
+    await page
+      .getByRole("status")
+      .filter({ hasText: "Đã lưu kịch bản và storyboard" })
+      .waitFor();
+    const imageBindings = await (
+      await page.request.get(
+        "http://127.0.0.1:5099/api/projects/" + clonedProject + "/document",
+      )
+    ).json();
+    assert.equal(imageBindings.document.scenes[0].options.speed, 1);
+    assert.equal(imageBindings.document.scenes[0].assetId, imageReplacement.id);
+    await board
+      .getByRole("button", { name: "Hoàn tác cảnh", exact: true })
+      .click();
+    await page.waitForFunction(
+      (id) =>
+        document.querySelector("app-storyboard .scene .scene-media select")
+          .value === id,
+      sourceAsset.id,
+    );
+    await board
+      .getByLabel("Tư liệu thay thế", { exact: true })
+      .selectOption(replacementAsset.id);
+    await board
+      .getByRole("button", { name: "Thay tư liệu trên mọi cảnh", exact: true })
+      .click();
+    await board
+      .getByRole("button", { name: "Lưu storyboard", exact: true })
+      .click();
+    await page
+      .getByRole("status")
+      .filter({ hasText: "Đã lưu kịch bản và storyboard" })
+      .waitFor();
+    const rebound = await (
+      await page.request.get(
+        "http://127.0.0.1:5099/api/projects/" + clonedProject + "/document",
+      )
+    ).json();
+    assert.equal(rebound.document.scenes.length, 5);
+    assert(!rebound.document.scenes.some((s) => s.assetId === sourceAsset.id));
+    assert.equal(rebound.document.captions.size, 24);
+    assert.equal(rebound.document.scenes[0].options.speed, 2);
+    const oldUsage = await (
+      await page.request.get(
+        "http://127.0.0.1:5099/api/projects/" +
+          clonedProject +
+          "/assets/" +
+          sourceAsset.id +
+          "/usage",
+      )
+    ).json();
+    assert.equal(oldUsage.scenes.length, 0);
+    assert(oldUsage.checkpoints.length >= 1 && oldUsage.jobCount >= 1);
+    await board.locator("app-caption-options summary").click();
+    await board
+      .locator(".scene")
+      .first()
+      .locator("app-scene-options summary")
+      .click();
+    console.log(
+      "PASS v0.10 browser: 10 scene controls, 10 caption style settings, real styled render/disabled scene/per-scene captions, favorites/tags/notes/filter, usage, byte duplicates, bulk rename, project copy with preferences, scenes from selection and binding replacement",
     );
     await page.evaluate(() => scrollTo(0, 0));
     await page.screenshot({

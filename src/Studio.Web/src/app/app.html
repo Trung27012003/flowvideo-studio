@@ -68,7 +68,7 @@
         ></span
       >
       <div class="header-right">
-        <span class="pill">MVP v0.9</span
+        <span class="pill">MVP v0.10</span
         ><select
           aria-label="Chọn dự án"
           [ngModel]="projectId()"
@@ -156,6 +156,7 @@
         } @else {
           <div class="studio-grid">
             <section class="panel settings">
+              <app-caption-options [(style)]="captionStyle" [disabled]="busy()" />
               <app-render-options [(options)]="effects" [disabled]="busy()" />
               <div class="panel-title">
                 <h2>Thiết lập video</h2>
@@ -448,7 +449,15 @@
                 <option value="audio">Audio</option>
                 <option value="subtitle">Phụ đề</option>
               </select></label
-            ><button class="secondary" (click)="libraryQuery.set(''); libraryKind.set('all')">
+            ><button
+              class="secondary"
+              (click)="
+                libraryQuery.set('');
+                libraryKind.set('all');
+                favoritesOnly.set(false);
+                libraryTag.set('')
+              "
+            >
               Xóa bộ lọc</button
             ><span>{{ filteredAssets().length }} / {{ assets().length }} tài nguyên</span>
           </div>
@@ -476,9 +485,85 @@
               Xuất danh mục CSV
             </button>
           </div>
+          <details class="batch-tools">
+            <summary>Công cụ tư liệu mở rộng</summary>
+            <div class="library-tools">
+              <label class="checkbox"
+                ><input
+                  type="checkbox"
+                  [ngModel]="favoritesOnly()"
+                  (ngModelChange)="favoritesOnly.set($event)"
+                />Chỉ tư liệu yêu thích</label
+              ><label
+                >Lọc nhãn tư liệu<input
+                  [ngModel]="libraryTag()"
+                  (ngModelChange)="libraryTag.set($event)"
+              /></label>
+            </div>
+            <div class="library-tools">
+              <label
+                >Dự án đích sao chép<select
+                  aria-label="Dự án đích sao chép"
+                  [(ngModel)]="copyTarget"
+                >
+                  <option value="">Chọn dự án khác</option>
+                  @for (p of projects(); track p.id) {
+                    @if (p.id !== projectId()) {
+                      <option [value]="p.id">{{ p.name }}</option>
+                    }
+                  }
+                </select></label
+              ><button
+                (click)="copyAssets()"
+                [disabled]="busy() || !copyTarget || !librarySelected().length"
+              >
+                Sao chép media sang dự án</button
+              ><button (click)="findDuplicates()" [disabled]="busy() || !librarySelected().length">
+                Tìm file trùng byte</button
+              ><button
+                (click)="addSelectedScenes()"
+                [disabled]="busy() || !documentLoaded() || !librarySelected().length"
+              >
+                Tạo cảnh từ media đã chọn
+              </button>
+            </div>
+            <div class="library-tools">
+              <label>Tiền tố tên hàng loạt<input [(ngModel)]="bulkPrefix" maxlength="60" /></label
+              ><label>Hậu tố tên hàng loạt<input [(ngModel)]="bulkSuffix" maxlength="60" /></label
+              ><label
+                >Số bắt đầu tên<input
+                  type="number"
+                  min="1"
+                  max="9999"
+                  [(ngModel)]="bulkStart" /></label
+              ><button
+                (click)="bulkRenameAssets()"
+                [disabled]="busy() || !librarySelected().length"
+              >
+                Đổi tên media hàng loạt
+              </button>
+            </div>
+            <p class="hint">
+              Copy/hash tối đa 20 file, tổng 100 MiB. Đổi tên theo tiền tố + số + hậu tố + đuôi
+              file. Tạo cảnh chỉ lấy ảnh/video, mỗi cảnh 5 giây.
+            </p>
+            @if (libraryReport()) {
+              <pre class="subtitle-report" role="status">{{ libraryReport() }}</pre>
+            }
+          </details>
           <div class="library">
             @for (a of filteredAssets(); track a.id) {
               <article class="library-card">
+                <button
+                  (click)="favoriteAsset(a.id)"
+                  [disabled]="busy()"
+                  [attr.aria-label]="'Yêu thích ' + a.name"
+                >
+                  {{ preference(a.id).favorite ? '★' : '☆' }}
+                </button>
+                @if (preference(a.id).tags.length) {
+                  <small>{{ preference(a.id).tags.join(' · ') }}</small>
+                }
                 <label
                   ><input
                     type="checkbox"
@@ -659,6 +744,7 @@
           @for (session of [boardSession()]; track session) {
             <app-storyboard
               [(scenes)]="scenes"
+              [(subtitleStyle)]="boardSubtitleStyle"
               (exportSelected)="exportSceneSelection($event)"
               (renderVariants)="renderVariants()"
               [(effects)]="boardEffects"
@@ -989,11 +1075,11 @@
       }
       @if (tab() === 'roadmap') {
         <section class="panel roadmap">
-          <h2>Đã hoạt động trong v0.9</h2>
+          <h2>Đã hoạt động trong v0.10</h2>
           <p>
-            v0.9 thêm mốc khôi phục, preset dựng cá nhân, so sánh bản nháp, kiểm tra trước khi dựng,
-            thao tác nhóm cảnh, căn cảnh theo lời và xử lý mốc SRT. Có dựng hai tỉ lệ, dựng lại bản
-            hoàn tất và thống kê/tìm tác vụ. Quản lý dự án và media, cắt điểm vào/ra từng clip, ghép
+            v0.10 thêm tùy chỉnh riêng từng cảnh, kiểu phụ đề, sao chép/đổi tên media hàng loạt,
+            phát hiện file trùng và quản lý yêu thích/nhãn/ghi chú tư liệu. Có tạo cảnh từ media và
+            thay tư liệu trên mọi cảnh. Quản lý dự án và media, cắt điểm vào/ra từng clip, ghép
             ảnh/video, loop trực tiếp, audio từ file, phụ đề SRT, hàng đợi lưu SQLite và tải MP4.
             Viết kịch bản, tạo giọng đọc và nhận diện phụ đề AI khi có API key. Chỉnh sửa SRT không
             cần AI.
@@ -1042,6 +1128,22 @@
     @if (error()) {
       <p role="alert">{{ error() }}</p>
     }
+    <details class="batch-tools" open>
+      <summary>Yêu thích, nhãn & ghi chú tư liệu</summary>
+      <label
+        ><input type="checkbox" [(ngModel)]="preferenceFavorite" />Đánh dấu tư liệu yêu thích</label
+      ><label>Nhãn tư liệu (cách bằng dấu phẩy)<input [(ngModel)]="preferenceTags" /></label
+      ><label
+        >Ghi chú tư liệu<textarea [(ngModel)]="preferenceNote" maxlength="1000"></textarea>
+      </label>
+      <div class="subtitle-toolbar">
+        <button (click)="savePreference()" [disabled]="busy()">Lưu thông tin tư liệu</button
+        ><button (click)="assetUsage()" [disabled]="busy()">Xem nơi dùng tư liệu</button>
+      </div>
+      @if (libraryReport()) {
+        <pre class="subtitle-report" role="status">{{ libraryReport() }}</pre>
+      }
+    </details>
     <div class="subtitle-toolbar">
       @if (asset.kind === 'video' || asset.kind === 'image') {
         <label

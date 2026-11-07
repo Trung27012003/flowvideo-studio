@@ -1,4 +1,4 @@
-# Kiểm chứng bản v0.9
+# Kiểm chứng bản v0.10
 
 Đã chạy trong môi trường Linux với .NET SDK 10.0.403, Node.js 24 và FFmpeg:
 
@@ -40,7 +40,7 @@ Phép đo trước/sau và giới hạn diễn giải xem tại [PERFORMANCE.md]
 - Startup đánh dấu Running Unknown, chỉ tiếp tục Queued. Kiểm tra thiếu key, phiên bản cũ, prompt rỗng và dọn file.
 - Browser dùng capability/image job API mô phỏng để kiểm tra queued/succeeded, chọn ảnh vào cảnh và dựng thật. Không có API key thật hoặc yêu cầu tính phí trong test.
 
-Tổng bộ integration tests hiện có 59 trường hợp. Chưa kiểm chứng chất lượng ảnh/quyền model/độ trễ thực tế bằng tài khoản OpenAI của người dùng.
+Tổng bộ integration tests hiện có 65 trường hợp. Chưa kiểm chứng chất lượng ảnh/quyền model/độ trễ thực tế bằng tài khoản OpenAI của người dùng.
 
 ## Đợt 10 chức năng
 
@@ -83,3 +83,13 @@ Các test không gửi request trả phí. Sinh video AI chưa được triển 
 - Media smoke cũ tiếp tục chạy cho concat/loop/trim, caption/audio, gain/fade/duck/effects, cancellation, errors/retry và restart persistence.
 
 Không gọi AI trả phí. Sinh video AI vẫn chưa được triển khai hoặc kiểm chứng trong v0.9.
+
+
+## Đợt 30 chức năng v0.10
+
+- 6 integration tests mới, tổng .NET 65: validate SceneOptions/CaptionStyle trên document/Studio; defaults cũ; save/JSON/clone/checkpoint/preset; skip disabled scene và caption; render cùng nguồn với override khác; metadata scope/limits/upsert/upgrade; hash/copy bytes độc lập/bulk name; usage document/checkpoint/job và chặn ID khác project.
+- Smoke FFmpeg: đo pixel red/blue khi speed 2×; phân biệt brightness của hai occurrence cùng file; fade đầu/cuối cảnh; cover-focus/zoom; chữ đỏ ở trên/dưới và nền hộp xanh thật. Các kiểm tra cũ vẫn chạy.
+- Browser: điều chỉnh đủ scene/style, render hai cảnh khi một cảnh tắt, kiểm tra cue bị tắt, lưu favorite/tags/note/lọc không dấu, usage, upload file trùng/hash, rename batch, copy qua project kèm metadata, tạo và thay liên kết cảnh, save/style persistence và mobile.
+- 17 test Node vẫn kiểm tra utility/SRT/compare, có trường captions trong phép so sánh cấu hình mới.
+
+Không gọi AI trả phí. Tạo video AI vẫn chưa có trong đợt v0.10.
