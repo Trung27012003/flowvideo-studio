@@ -68,7 +68,7 @@
         ></span
       >
       <div class="header-right">
-        <span class="pill">MVP v0.4</span
+        <span class="pill">MVP v0.5</span
         ><select
           aria-label="Chọn dự án"
           [ngModel]="projectId()"
@@ -420,6 +420,11 @@
             [(musicId)]="boardMusic"
             [(autoCaptions)]="boardCaptions"
             [assets]="assets()"
+            [imageEnabled]="imageEnabled()"
+            [imageJobs]="imageJobs()"
+            [imageUsed]="imageUsed()"
+            [imageLimit]="imageLimit()"
+            (generateImage)="generateSceneImage($event)"
             [disabled]="busy()"
             [version]="documentVersion()"
             (save)="saveDocument()"
@@ -587,15 +592,15 @@
       }
       @if (tab() === 'roadmap') {
         <section class="panel roadmap">
-          <h2>Đã hoạt động trong v0.4</h2>
+          <h2>Đã hoạt động trong v0.5</h2>
           <p>
             Quản lý dự án và media, cắt điểm vào/ra từng clip, ghép ảnh/video, loop trực tiếp, audio
             từ file, phụ đề SRT, hàng đợi lưu SQLite và tải MP4. Viết kịch bản, tạo giọng đọc và
             nhận diện phụ đề AI khi có API key. Chỉnh sửa SRT không cần AI.
           </p>
           <h2>Giai đoạn tiếp theo</h2>
-          <p>1. Tạo tư liệu AI và giọng đọc tự động cho từng cảnh.</p>
-          <p>2. Tạo ảnh/video AI từng cảnh, theo dõi request và ngân sách.</p>
+          <p>1. Tự động tạo ảnh và giọng cho toàn storyboard.</p>
+          <p>2. Tạo video AI, ảnh tham chiếu và theo dõi chi phí.</p>
           <p>3. Timeline nhiều track, split và preview proxy.</p>
           <p>4. Loop crossfade/ping-pong và kiểm tra mối nối.</p>
           <p>5. Cắt video theo transcript và xuất nhiều phiên bản.</p>

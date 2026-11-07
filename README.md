@@ -6,11 +6,11 @@ Studio video cá nhân bằng **Angular 21 + ASP.NET Core / .NET 10 + FFmpeg**. 
 
 ![Giao diện FlowVideo Studio](docs/studio-preview.png)
 
-## Trạng thái v0.4
+## Trạng thái v0.5
 
-**Đã triển khai:** tạo/chọn dự án; nhập ảnh, video, audio, SRT; chọn và sắp xếp cảnh; cắt điểm vào/ra từng clip; ghép ảnh/video; loop trực tiếp một nguồn; thêm giọng đọc từ file và nhạc nền; burn-in SRT; hàng đợi, hủy job đang chờ/đang chạy, thử lại job lỗi; preview/tải MP4; tạo kịch bản, giọng đọc AI và phụ đề từ lời nói khi cấu hình API key; chỉnh sửa/lưu SRT không cần AI; lưu kịch bản và storyboard theo dự án; dựng theo thời lượng từng cảnh và tạo phụ đề từ lời cảnh.
+**Đã triển khai:** tạo/chọn dự án; nhập ảnh, video, audio, SRT; chọn và sắp xếp cảnh; cắt điểm vào/ra từng clip; ghép ảnh/video; loop trực tiếp một nguồn; thêm giọng đọc từ file và nhạc nền; burn-in SRT; hàng đợi, hủy job đang chờ/đang chạy, thử lại job lỗi; preview/tải MP4; tạo kịch bản, giọng đọc AI và phụ đề từ lời nói khi cấu hình API key; chỉnh sửa/lưu SRT không cần AI; lưu kịch bản và storyboard theo dự án; dựng theo thời lượng từng cảnh và tạo phụ đề từ lời cảnh; tạo ảnh AI theo prompt từng cảnh với hàng đợi, lịch sử và giới hạn lượt.
 
-**Chưa triển khai:** sinh video/ảnh AI, editor timeline nhiều track/split, loop crossfade/ping-pong, đăng mạng xã hội, tự động tạo toàn bộ tư liệu/giọng đọc từ ý tưởng. Các chức năng này được mô tả trong [roadmap](docs/ROADMAP.md), không giả lập kết quả AI.
+**Chưa triển khai:** sinh video AI, sửa ảnh theo ảnh tham chiếu, editor timeline nhiều track/split, loop crossfade/ping-pong, đăng mạng xã hội, tự động tạo toàn bộ tư liệu/giọng đọc từ ý tưởng. Các chức năng này được mô tả trong [roadmap](docs/ROADMAP.md), không giả lập kết quả AI.
 
 ## Chạy phát triển
 
@@ -31,7 +31,15 @@ Tạo dự án → nhập media → chọn cảnh theo thứ tự → chỉnh đ
 
 Đặt biến môi trường `OPENAI_API_KEY` trong terminal chạy backend; `OPENAI_MODEL` mặc định `gpt-4o-mini`. Không đặt key trong Angular hay commit vào Git. File `.env.example` chỉ là mẫu; ứng dụng **không tự đọc `.env`**. Tạo kịch bản, giọng đọc và nhận diện phụ đề đều có thể phát sinh phí. `OPENAI_TTS_MODEL` mặc định `gpt-4o-mini-tts`; STT dùng `whisper-1` để lấy mốc thời gian. Cần model được tài khoản cho phép sử dụng.
 
-Bấm **Lưu kịch bản** để giữ nội dung theo dự án. Có thể chia các đoạn thành cảnh, chọn tư liệu và dựng bằng storyboard; AI hiện chưa tự tạo media cho các cảnh.
+Bấm **Lưu kịch bản** để giữ nội dung theo dự án. Có thể chia các đoạn thành cảnh, chọn tư liệu và dựng bằng storyboard; Ảnh có thể tạo riêng bằng nút AI cho từng cảnh; chưa tự tạo toàn bộ tư liệu cho cả kịch bản.
+
+## Ảnh AI v0.5
+
+Trong Storyboard, nhập prompt cho cảnh → **Tạo ảnh AI cho cảnh**. Ứng dụng lưu storyboard và xếp hàng; ảnh thành công xuất hiện trong thư viện và danh sách ảnh AI. Bấm **Dùng ảnh cho cảnh**, rồi lưu hoặc dựng storyboard.
+
+Cần `OPENAI_API_KEY` và quyền dùng `OPENAI_IMAGE_MODEL` (mặc định `gpt-image-1`). Mặc định tạo một PNG, quality low, kích thước dọc/ngang gần nhất do model hỗ trợ. Yêu cầu có thể tính phí. Giới hạn mặc định 10 yêu cầu đã nhận trong 24 giờ cho toàn ứng dụng; `IMAGE_DAILY_LIMIT` đặt trong khoảng 1–100. Đây là giới hạn số lượt, không phải ngân sách tiền.
+
+Mã yêu cầu được ghi trước khi gọi dịch vụ; không tự retry. Prompt/model/kích thước giống một kết quả thành công của cùng cảnh sẽ dùng lại ảnh. Timeout/mất kết nối hoặc restart khi đang chạy được đánh dấu Unknown; dịch vụ có thể đã tính phí. Xem [hướng dẫn ảnh AI](docs/IMAGES.md).
 
 ## Storyboard v0.4
 

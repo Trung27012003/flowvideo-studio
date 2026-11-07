@@ -312,6 +312,8 @@ public sealed class AudioApp : WebApplicationFactory<Program>
         Path.Combine(Path.GetTempPath(), "flowvideo-audio-test-" + Guid.NewGuid().ToString("N"));
     public string Audio => Path.Combine(Data, "fixture.mp3");
     public string Video => Path.Combine(Data, "fixture.mp4");
+    public HttpMessageHandler? ImageHandler;
+    public int ImageLimit = 10;
     public int Calls;
     public string SpeechBody = "";
     public string TranscriptionBody = "";
@@ -366,13 +368,17 @@ public sealed class AudioApp : WebApplicationFactory<Program>
                     {
                         { "STUDIO_DATA", Data },
                         { "OPENAI_API_KEY", key ? "test-key-not-real" : "" },
+                        { "IMAGE_DAILY_LIMIT", ImageLimit.ToString() },
                     }
                 )
         );
         builder.ConfigureServices(s =>
+        {
             s.AddHttpClient("OpenAiAudio")
-                .ConfigurePrimaryHttpMessageHandler(() => new FakeAudio(this))
-        );
+                .ConfigurePrimaryHttpMessageHandler(() => new FakeAudio(this));
+            s.AddHttpClient("OpenAiImage")
+                .ConfigurePrimaryHttpMessageHandler(() => ImageHandler ?? new RejectImage());
+        });
     }
 
     protected override void Dispose(bool disposing)
@@ -380,6 +386,14 @@ public sealed class AudioApp : WebApplicationFactory<Program>
         base.Dispose(disposing);
         if (disposing && Directory.Exists(Data))
             Directory.Delete(Data, true);
+    }
+
+    private class RejectImage : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken ct
+        ) => throw new InvalidOperationException("Unexpected AI image request in test.");
     }
 
     private class FakeAudio(AudioApp app) : HttpMessageHandler

@@ -128,3 +128,60 @@ select {
     width: 100%;
   }
 }
+
+.image-create {
+  font-size: 11px;
+  width: 100%;
+}
+.image-history {
+  border-top: 1px solid #2b3d51;
+  margin-top: 25px;
+  padding-top: 24px;
+}
+.image-history h3 {
+  font-size: 14px;
+}
+.image-history > p {
+  font-size: 11px;
+  color: #92a8c1;
+  line-height: 1.8;
+}
+.image-job {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 16px 0;
+  border-bottom: 1px solid #25384a;
+}
+.image-job img {
+  width: 90px;
+  height: 110px;
+  object-fit: cover;
+  border-radius: 7px;
+}
+.image-job > div {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.image-job b,
+.image-job p,
+.image-job button {
+  font-size: 11px;
+}
+.image-job p {
+  color: #a8bbd0;
+  margin: 8px 0;
+  line-height: 1.8;
+}
+.image-job small {
+  line-height: 1.8;
+}
+@media (max-width: 650px) {
+  .image-job {
+    flex-wrap: wrap;
+  }
+  .image-job button {
+    width: 100%;
+  }
+}

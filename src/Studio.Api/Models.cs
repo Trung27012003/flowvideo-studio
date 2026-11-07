@@ -55,9 +55,13 @@ public class StudioDb(DbContextOptions<StudioDb> options) : DbContext(options)
     public DbSet<Asset> Assets => Set<Asset>();
     public DbSet<RenderJob> Jobs => Set<RenderJob>();
     public DbSet<ProjectDocument> ProjectDocuments => Set<ProjectDocument>();
+    public DbSet<ImageGeneration> ImageGenerations => Set<ImageGeneration>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<ImageGeneration>().HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId);
+        b.Entity<ImageGeneration>().HasIndex(x => new { x.ProjectId, x.CreatedAt });
+        b.Entity<ImageGeneration>().HasIndex(x => new { x.Status, x.CreatedAt });
         b.Entity<ProjectDocument>().HasKey(x => x.ProjectId);
         b.Entity<ProjectDocument>()
             .HasOne<Project>()

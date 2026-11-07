@@ -11,7 +11,7 @@
 5. Chọn tỉ lệ, giọng/nhạc từ thư viện; bật phụ đề từ lời cảnh nếu muốn.
 6. Lưu storyboard hoặc Lưu & dựng storyboard. Theo dõi job trong Studio và tải MP4 khi hoàn tất.
 
-Tạo storyboard/dựng từ tư liệu có sẵn không gọi AI, không cần API key. Giọng đã tạo bằng TTS ở màn hình audio có thể được chọn trong storyboard. Không tự tạo giọng hoặc sinh ảnh/video khi bấm dựng.
+Tạo storyboard/dựng từ tư liệu có sẵn không gọi AI, không cần API key. Giọng đã tạo bằng TTS ở màn hình audio có thể được chọn trong storyboard. Có thể tạo ảnh cho từng cảnh bằng nút riêng; không tự tạo giọng hoặc sinh ảnh/video khi bấm dựng. Xem [ảnh AI](IMAGES.md).
 
 ## Thời gian và phụ đề
 

@@ -33,6 +33,15 @@
 - [x] Cấu hình job không bị đổi bởi lần lưu storyboard tiếp theo
 - [x] Nâng cấp database cũ và kiểm thử reload/đảo cảnh trên trình duyệt
 
+## V0.5 — ảnh AI đã bổ sung
+
+- [x] Tạo ảnh từ prompt của cảnh qua OpenAI, một PNG/request
+- [x] Worker ảnh, trạng thái lưu bền vững và tiếp tục các yêu cầu queued
+- [x] Request ID chống gửi trùng, reuse ảnh cùng prompt/cấu hình
+- [x] Giới hạn lượt trong 24 giờ, Unknown khi kết quả không rõ, không tự retry
+- [x] Lưu thư viện và gắn vào cảnh bằng thao tác rõ ràng
+- [x] Provider contract tests và browser UI contract với upstream mô phỏng
+
 ## Tiếp theo — chất lượng nền tảng (2–3 tuần)
 
 - ffprobe kiểm tra file ngay sau upload; duration, thumbnail, waveform
@@ -46,18 +55,18 @@
 - Alignment theo từng từ, editor dạng bảng và xuất ASS
 - Từ điển phát âm, auto-ducking và loudness normalization
 
-## V0.5 — tự động hóa storyboard (3–4 tuần)
+## Tiếp theo — tự động hóa storyboard (3–4 tuần)
 
 - AI chia cảnh có cấu trúc, provenance media và lịch sử bản lưu có thể khôi phục
 - Voice timing quyết định duration thực tế
 - Tự tạo giọng/tư liệu cho từng cảnh, trạng thái từng bước và resume
 - Trần ngân sách; cache kết quả và invalidation khi sửa cảnh
 
-## V0.6 — AI image/video (3–4 tuần)
+## V0.6 — video AI và ảnh tham chiếu (3–4 tuần)
 
-- Một provider image và một provider video có API chính thức
+- Một provider video có API chính thức; image-to-image và ảnh tham chiếu
 - Capability matrix; ảnh tham chiếu và hồ sơ nhân vật
-- Persist provider request ID, kiểm tra trạng thái trước retry tính phí
+- Hoàn thiện đối soát request và số tiền sử dụng theo provider
 - Tạo lại từng cảnh, lựa chọn kết quả, usage/cost ledger
 
 ## V0.7 — editor, loop và clip thông minh (4–6 tuần)

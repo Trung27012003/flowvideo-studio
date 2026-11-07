@@ -1,4 +1,4 @@
-# Kiểm chứng bản v0.4
+# Kiểm chứng bản v0.5
 
 Đã chạy trong môi trường Linux với .NET SDK 10.0.403, Node.js 24 và FFmpeg:
 
@@ -31,3 +31,13 @@ Phép đo trước/sau và giới hạn diễn giải xem tại [PERFORMANCE.md]
 - Dựng hai cảnh dùng cùng nguồn ngắn với duration khác nhau; xác nhận thời lượng đầu ra và snapshot job không đổi khi document được sửa.
 - Database schema cũ với project/media có sẵn được nâng cấp thêm bảng document và giữ nguyên dữ liệu/file.
 - Browser: lưu script, reload, chia cảnh, chọn media, dựng thật, đổi thứ tự, lưu/reload, kiểm tra mobile và menu có nhãn truy cập.
+
+## Ảnh AI
+
+- Queue → provider mô phỏng → PNG đúng kích thước → decode/asset → gắn vào document → render FFmpeg thật.
+- Mã request trùng không gọi lại; yêu cầu khác khi cảnh đang chạy bị từ chối; ảnh cùng fingerprint được reuse trước quota. Đổi prompt khi hết quota bị từ chối.
+- Lỗi HTTP, JSON, PNG và kích thước không tạo asset; network/timeout ghi Unknown; gọi lại cùng ID không retry.
+- Startup đánh dấu Running Unknown, chỉ tiếp tục Queued. Kiểm tra thiếu key, phiên bản cũ, prompt rỗng và dọn file.
+- Browser dùng capability/image job API mô phỏng để kiểm tra queued/succeeded, chọn ảnh vào cảnh và dựng thật. Không có API key thật hoặc yêu cầu tính phí trong test.
+
+Tổng bộ integration tests hiện có 26 trường hợp. Chưa kiểm chứng chất lượng ảnh/quyền model/độ trễ thực tế bằng tài khoản OpenAI của người dùng.

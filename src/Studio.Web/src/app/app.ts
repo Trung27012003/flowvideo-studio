@@ -1,6 +1,6 @@
 import { Component, OnDestroy, OnInit, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { StoryboardEditor, SceneDraft } from './storyboard';
+import { StoryboardEditor, SceneDraft, ImageRow } from './storyboard';
 interface Project {
   id: string;
   name: string;
@@ -37,6 +37,11 @@ export class App implements OnInit, OnDestroy {
   subtitles = computed(() => this.assets().filter((a) => a.kind === 'subtitle'));
   media = computed(() => this.assets().filter((a) => a.kind === 'video' || a.kind === 'image'));
   aiEnabled = signal(false);
+  imageEnabled = signal(false);
+  imageJobs = signal<ImageRow[]>([]);
+  imageUsed = signal(0);
+  imageLimit = signal(10);
+  private imageRequestVersion = 0;
   speechEnabled = signal(false);
   transcriptionEnabled = signal(false);
   voices = signal<string[]>([]);
@@ -85,6 +90,7 @@ export class App implements OnInit, OnDestroy {
       ]);
       this.projects.set(projects);
       this.aiEnabled.set(capabilities.scriptAi);
+      this.imageEnabled.set(capabilities.imageAi);
       this.speechEnabled.set(capabilities.tts);
       this.transcriptionEnabled.set(capabilities.transcription);
       this.voices.set(capabilities.voices || []);
@@ -100,12 +106,16 @@ export class App implements OnInit, OnDestroy {
   private schedulePoll() {
     clearTimeout(this.timer);
     if (this.destroyed) return;
-    const active = this.jobs().some((j) => j.status === 'Queued' || j.status === 'Running');
+    const active =
+      this.jobs().some((j) => j.status === 'Queued' || j.status === 'Running') ||
+      this.imageJobs().some(
+        (r) => r.generation.status === 'Queued' || r.generation.status === 'Running',
+      );
     const delay = this.syncError() ? 30000 : active ? 2500 : 15000;
     this.timer = setTimeout(async () => {
       if (!document.hidden && this.projectId()) {
         try {
-          await this.refreshJobs();
+          await Promise.all([this.refreshJobs(), this.refreshImages()]);
           this.syncError.set(false);
         } catch {
           if (!this.destroyed) this.syncError.set(true);
@@ -169,6 +179,8 @@ export class App implements OnInit, OnDestroy {
     this.boardCaptions.set(true);
     this.assets.set([]);
     this.jobs.set([]);
+    this.imageJobs.set([]);
+    this.imageUsed.set(0);
     this.selected.set([]);
     this.cuts.set({});
     this.speechPreview.set('');
@@ -185,6 +197,7 @@ export class App implements OnInit, OnDestroy {
         if (version === this.projectVersion && !this.destroyed) this.assets.set(assets);
       }),
       this.refreshJobs(),
+      this.refreshImages(),
       this.api('/projects/' + id + '/document').then((result) => {
         if (version !== this.projectVersion || this.destroyed) return;
         const doc = result.document;
@@ -213,6 +226,33 @@ export class App implements OnInit, OnDestroy {
     const jobs = await this.api('/projects/' + id + '/jobs');
     if (id === this.projectId() && version === this.requestVersion && !this.destroyed)
       this.jobs.set(jobs);
+  }
+  async refreshImages() {
+    const id = this.projectId();
+    const version = ++this.imageRequestVersion;
+    const result = await this.api('/projects/' + id + '/image-generations');
+    if (id !== this.projectId() || version !== this.imageRequestVersion || this.destroyed) return;
+    this.imageJobs.set(result.items);
+    this.imageUsed.set(result.used);
+    this.imageLimit.set(result.dailyLimit);
+    for (const row of result.items as ImageRow[]) if (row.asset) this.addAsset(row.asset);
+  }
+  async generateSceneImage(sceneId: string) {
+    await this.perform(async () => {
+      const version = await this.storeDocument();
+      const result = await this.api('/projects/' + this.projectId() + '/image-generations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId: crypto.randomUUID(), sceneId, version }),
+      });
+      await this.refreshImages();
+      this.schedulePoll();
+      this.notice.set(
+        result.reused
+          ? 'Yêu cầu đã có kết quả hoặc đang xử lý; không tạo thêm lượt. Chọn ảnh trong danh sách bên dưới.'
+          : 'Đã lưu storyboard và xếp hàng tạo ảnh. Bạn có thể tiếp tục chỉnh cảnh trong khi chờ.',
+      );
+    });
   }
   setCut(id: string, field: 'start' | 'end', value: number | null) {
     this.cuts.update((cuts) => ({
@@ -296,7 +336,9 @@ export class App implements OnInit, OnDestroy {
     });
   }
   private addAsset(asset: Asset) {
-    this.assets.update((assets) => [...assets.filter((a) => a.id !== asset.id), asset]);
+    this.assets.update((assets) =>
+      assets.some((a) => a.id === asset.id) ? assets : [...assets, asset],
+    );
   }
   async generateSpeech() {
     await this.perform(async () => {

@@ -14,6 +14,7 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), "flowvideo-browser-"));
   let server,
     browser,
+    page,
     logs = "";
   try {
     const clip = path.join(temp, "sample.mp4");
@@ -84,7 +85,7 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
         : {}),
       args: ["--no-sandbox"],
     });
-    const page = await browser.newPage({
+    page = await browser.newPage({
       viewport: { width: 1440, height: 1050 },
     });
     const errors = [];
@@ -95,6 +96,9 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       .fill("Browser smoke");
     await page.getByRole("button", { name: "＋ Tạo dự án" }).click();
     await page.getByRole("heading", { name: "Thiết lập video" }).waitFor();
+    await page.waitForFunction(
+      () => !document.querySelector("input[type=file]")?.disabled,
+    );
     await page.locator("input[type=file]").setInputFiles([clip, subtitle]);
     await page
       .getByRole("status")
@@ -257,6 +261,146 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
         .inputValue(),
       "Kết thúc câu chuyện.",
     );
+    // UI contract simulation only: the provider integration and durable queue
+    // are tested separately in ImageTests; this server has no real API key.
+    const projectId = await page
+      .getByRole("combobox", { name: "Chọn dự án" })
+      .inputValue();
+    const picture = path.join(temp, "ai-ui.png");
+    execFileSync("ffmpeg", [
+      "-y",
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "color=c=teal:s=320x240",
+      "-frames:v",
+      "1",
+      "-threads",
+      "1",
+      picture,
+    ]);
+    const uploadImage = await page.request.post(
+      "http://127.0.0.1:5099/api/projects/" + projectId + "/assets",
+      {
+        multipart: {
+          file: {
+            name: "ai-ui.png",
+            mimeType: "image/png",
+            buffer: await fs.readFile(picture),
+          },
+        },
+      },
+    );
+    assert.equal(uploadImage.ok(), true);
+    const uiImage = await uploadImage.json();
+    let imageRow = null;
+    let imageStatus = "Queued";
+    await page.route("**/api/capabilities", async (route) => {
+      const response = await route.fetch();
+      const caps = await response.json();
+      await route.fulfill({ json: { ...caps, imageAi: true } });
+    });
+    await page.route(
+      "**/api/projects/" + projectId + "/image-generations",
+      async (route) => {
+        if (route.request().method() === "POST") {
+          const payload = route.request().postDataJSON();
+          assert(payload.version >= 1);
+          imageRow = {
+            id: payload.requestId,
+            sceneId: payload.sceneId,
+            status: "Queued",
+            prompt: "Một căn phòng yên tĩnh",
+            message: "Đang chờ tạo ảnh",
+            model: "gpt-image-1",
+            size: "1024x1536",
+            quality: "low",
+          };
+          await route.fulfill({
+            status: 202,
+            json: { generation: imageRow, reused: false },
+          });
+        } else
+          await route.fulfill({
+            json: {
+              dailyLimit: 10,
+              used: imageRow ? 1 : 0,
+              items: imageRow
+                ? [
+                    {
+                      generation: {
+                        ...imageRow,
+                        status: imageStatus,
+                        message:
+                          imageStatus === "Succeeded"
+                            ? "Đã lưu ảnh"
+                            : "Đang chờ tạo ảnh",
+                      },
+                      asset: imageStatus === "Succeeded" ? uiImage : null,
+                    },
+                  ]
+                : [],
+            },
+          });
+      },
+    );
+    await page.reload();
+    await page.getByRole("button", { name: "Storyboard", exact: true }).click();
+    await page
+      .getByRole("textbox", { name: "Ghi chú hình ảnh / prompt" })
+      .nth(0)
+      .fill("Một căn phòng yên tĩnh");
+    await page
+      .getByRole("button", { name: "✧ Tạo ảnh AI cho cảnh", exact: true })
+      .nth(0)
+      .click();
+    await page
+      .locator(".image-job b")
+      .filter({ hasText: "Đang chờ" })
+      .waitFor();
+    assert.equal(
+      await page
+        .getByRole("button", { name: "Đang xử lý ảnh…", exact: true })
+        .isDisabled(),
+      true,
+    );
+    imageStatus = "Succeeded";
+    await page
+      .getByRole("button", { name: "Dùng ảnh cho cảnh", exact: true })
+      .waitFor({ timeout: 15000 });
+    await page
+      .getByRole("button", { name: "Dùng ảnh cho cảnh", exact: true })
+      .click();
+    await page.waitForFunction(
+      (id) =>
+        document.querySelector("app-storyboard .scene-media select")?.value ===
+        id,
+      uiImage.id,
+    );
+    assert.equal(
+      await page
+        .getByRole("combobox", { name: "Tư liệu của cảnh" })
+        .nth(0)
+        .inputValue(),
+      uiImage.id,
+    );
+    await page
+      .getByRole("button", { name: "Lưu & dựng storyboard", exact: true })
+      .click();
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll('a.download[href$="/download"]').length === 3,
+    );
+    const imageDocument = await (
+      await page.request.get(
+        "http://127.0.0.1:5099/api/projects/" + projectId + "/document",
+      )
+    ).json();
+    assert.equal(imageDocument.document.scenes[0].assetId, uiImage.id);
+    await page.getByRole("button", { name: "Storyboard", exact: true }).click();
     await page.evaluate(() => scrollTo(0, 0));
     await page.screenshot({
       path: path.join(root, "test-results/storyboard.png"),
@@ -292,9 +436,18 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     });
     assert.deepEqual(errors, []);
     console.log(
-      "PASS browser: project, upload, trim, real export/preview, cancel, library, subtitle editor/download, AI capability, persistent script/storyboard, scene render, reorder, mobile layout; no JS errors",
+      "PASS browser: project, upload, trim, real export/preview, cancel, library, subtitle editor/download, AI capability, persistent script/storyboard, scene render, reorder, image job/apply UI contract, mobile layout; no JS errors",
     );
   } catch (error) {
+    if (page) {
+      try {
+        await fs.mkdir(path.join(root, "test-results"), { recursive: true });
+        await page.screenshot({
+          path: path.join(root, "test-results/failure.png"),
+          fullPage: true,
+        });
+      } catch {}
+    }
     console.error(logs);
     throw error;
   } finally {

@@ -128,11 +128,28 @@
               placeholder="Mô tả cảnh để dùng lại khi tạo tư liệu…"
             ></textarea>
           </label>
+          <button
+            class="secondary image-create"
+            (click)="generateImage.emit(scene.id)"
+            [disabled]="
+              disabled() || !imageEnabled() || !scene.prompt.trim() || imageActive(scene.id)
+            "
+          >
+            {{ imageActive(scene.id) ? 'Đang xử lý ảnh…' : '✧ Tạo ảnh AI cho cảnh' }}
+          </button>
         </article>
       } @empty {
         <div class="empty">Thêm cảnh hoặc chia kịch bản thành các đoạn ở màn hình Kịch bản AI.</div>
       }
     </div>
+    <p class="hint">
+      Tạo ảnh gửi prompt đến OpenAI và có thể tính phí. Tối đa {{ imageLimit() }} yêu cầu trong 24
+      giờ trên ứng dụng; đã dùng {{ imageUsed() }}. Cấu hình và prompt đã tạo thành công sẽ dùng lại
+      ảnh. Không tự gửi lại khi lỗi hoặc chưa rõ kết quả.
+    </p>
+    @if (!imageEnabled()) {
+      <p class="hint">Cấu hình OPENAI_API_KEY ở backend để tạo ảnh. Ảnh đã có vẫn dùng được.</p>
+    }
     <div class="actions">
       <button class="secondary" (click)="add()" [disabled]="disabled() || scenes().length >= 30">
         ＋ Thêm cảnh</button
@@ -145,5 +162,43 @@
         Lưu & dựng storyboard
       </button>
     </div>
+    <section class="image-history">
+      <h3>Ảnh AI của dự án</h3>
+      @for (row of imageJobs(); track row.generation.id) {
+        <div class="image-job">
+          @if (row.asset) {
+            <img
+              [src]="'/api/assets/' + row.asset.id + '/file'"
+              alt="Ảnh AI đã tạo"
+              loading="lazy"
+            />
+          }
+          <div>
+            <b>{{ imageStatus(row.generation.status) }}</b>
+            <p>{{ row.generation.prompt.slice(0, 120) }}</p>
+            <small>{{ row.generation.message }}</small
+            ><small
+              >{{ row.generation.model }} · {{ row.generation.size }} ·
+              {{ row.generation.quality }}</small
+            >
+          </div>
+          @if (row.asset) {
+            <button
+              class="secondary"
+              (click)="applyImage(row)"
+              [disabled]="disabled() || !sceneExists(row.generation.sceneId)"
+            >
+              Dùng ảnh cho cảnh
+            </button>
+          }
+        </div>
+      } @empty {
+        <p>Chưa có yêu cầu ảnh. Nhập prompt cho một cảnh để bắt đầu.</p>
+      }
+      <p class="hint">
+        Dùng ảnh chỉ thay đổi bản đang sửa; bấm Lưu storyboard để giữ. Khi kết quả chưa rõ, kiểm tra
+        tài khoản nhà cung cấp trước khi tạo yêu cầu mới.
+      </p>
+    </section>
   </fieldset>
 </section>
