@@ -1,0 +1,73 @@
+using Microsoft.EntityFrameworkCore;
+
+namespace Studio;
+
+public class Project
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = "";
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class Asset
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid ProjectId { get; set; }
+    public string Name { get; set; } = "";
+    public string Kind { get; set; } = "";
+    public string StoredName { get; set; } = "";
+}
+
+public class RenderJob
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid ProjectId { get; set; }
+    public string RequestJson { get; set; } = "";
+    public string Status { get; set; } = "Queued";
+    public string Message { get; set; } = "Đang chờ";
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public record RenderRequest(
+    Guid[] AssetIds,
+    string Mode = "concat",
+    int Duration = 30,
+    Guid? VoiceId = null,
+    Guid? MusicId = null,
+    Guid? SubtitleId = null,
+    string Ratio = "9:16"
+);
+
+public record NameRequest(string Name);
+
+public record ScriptRequest(string Idea);
+
+public class StudioDb(DbContextOptions<StudioDb> options) : DbContext(options)
+{
+    public DbSet<Project> Projects => Set<Project>();
+    public DbSet<Asset> Assets => Set<Asset>();
+    public DbSet<RenderJob> Jobs => Set<RenderJob>();
+
+    protected override void OnModelCreating(ModelBuilder b)
+    {
+        b.Entity<Asset>().HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId);
+        b.Entity<RenderJob>().HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId);
+    }
+}
+
+public class Storage
+{
+    public string Root { get; }
+
+    public Storage(IConfiguration c)
+    {
+        Root = Path.GetFullPath(c["STUDIO_DATA"] ?? "data");
+        Directory.CreateDirectory(Path.Combine(Root, "assets"));
+        Directory.CreateDirectory(Path.Combine(Root, "exports"));
+        Directory.CreateDirectory(Path.Combine(Root, "temp"));
+    }
+
+    public string AssetPath(Asset a) => Path.Combine(Root, "assets", a.StoredName);
+
+    public string Output(Guid id) => Path.Combine(Root, "exports", id + ".mp4");
+}

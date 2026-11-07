@@ -1,0 +1,13 @@
+**/node_modules/
+**/dist/
+**/.angular/
+**/bin/
+**/obj/
+**/data/
+**/.vscode/
+.env
+.env.*
+!.env.example
+*.user
+work/
+test-results/

@@ -1,0 +1,360 @@
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="/"
+      >◈ <span>FlowVideo<small>PERSONAL AI STUDIO</small></span></a
+    >
+    <div class="nav-label">KHÔNG GIAN SÁNG TẠO</div>
+    <button [class.active]="tab() === 'studio'" (click)="tab.set('studio')">
+      ▷ <span>Studio & render</span>
+    </button>
+    <button [class.active]="tab() === 'library'" (click)="tab.set('library')">
+      ▦ <span>Thư viện media</span>
+    </button>
+    <button [class.active]="tab() === 'script'" (click)="tab.set('script')">
+      ✧ <span>Kịch bản AI</span>
+    </button>
+    <button [class.active]="tab() === 'roadmap'" (click)="tab.set('roadmap')">
+      ☷ <span>Lộ trình phát triển</span>
+    </button>
+    <div class="local">
+      <span class="dot"></span> Local workspace<small>Media được lưu trên máy chạy backend.</small>
+    </div>
+  </aside>
+  <div class="workspace">
+    <header>
+      <span
+        >Workspace
+        <b
+          >/
+          {{
+            tab() === 'studio'
+              ? 'Studio'
+              : tab() === 'library'
+                ? 'Thư viện'
+                : tab() === 'script'
+                  ? 'Kịch bản'
+                  : 'Lộ trình'
+          }}</b
+        ></span
+      >
+      <div class="header-right">
+        <span class="pill">MVP v0.1</span
+        ><select
+          aria-label="Chọn dự án"
+          [ngModel]="projectId()"
+          (ngModelChange)="switchProject($event)"
+          [disabled]="busy()"
+        >
+          @for (p of projects(); track p.id) {
+            <option [value]="p.id">{{ p.name }}</option>
+          }
+        </select>
+      </div>
+    </header>
+    <main>
+      <div class="eyebrow">CREATE SOMETHING WORTH WATCHING</div>
+      <h1>
+        {{
+          tab() === 'studio'
+            ? 'Từ ý tưởng đến từng khung hình.'
+            : tab() === 'library'
+              ? 'Tài nguyên cho câu chuyện của bạn.'
+              : tab() === 'script'
+                ? 'Bắt đầu bằng một ý tưởng.'
+                : 'Từng bước hoàn thiện studio.'
+        }}
+      </h1>
+      <p class="intro">Studio cá nhân để ghép video, tạo loop, lồng âm thanh và thêm phụ đề.</p>
+      <form class="project-bar" (ngSubmit)="createProject()">
+        <input
+          name="projectName"
+          [(ngModel)]="projectName"
+          placeholder="Tên dự án mới…"
+          maxlength="120"
+          aria-label="Tên dự án mới"
+        /><button class="secondary" [disabled]="busy() || !projectName.trim()">＋ Tạo dự án</button>
+      </form>
+      @if (error()) {
+        <div class="alert error" role="alert">{{ error() }}</div>
+      }
+      @if (notice()) {
+        <div class="alert" role="status">{{ notice() }}</div>
+      }
+      @if (tab() === 'studio') {
+        @if (!projectId()) {
+          <div class="empty">
+            <div>◈</div>
+            <h2>Studio của bạn bắt đầu tại đây</h2>
+            <p>Tạo một dự án, thêm ảnh hoặc video và bắt đầu dựng.</p>
+          </div>
+        } @else {
+          <div class="studio-grid">
+            <section class="panel settings">
+              <div class="panel-title">
+                <h2>Thiết lập video</h2>
+                <span>01</span>
+              </div>
+              <label
+                >Chế độ dựng<select [(ngModel)]="mode">
+                  <option value="concat">Ghép ảnh / video</option>
+                  <option value="loop">Lặp một ảnh / video</option>
+                </select></label
+              >
+              <div class="two">
+                <label
+                  >Tỉ lệ<select [(ngModel)]="ratio">
+                    <option value="9:16">9:16 · Dọc</option>
+                    <option value="16:9">16:9 · Ngang</option>
+                  </select></label
+                ><label
+                  >Giới hạn (giây)<input type="number" min="1" max="600" [(ngModel)]="duration"
+                /></label>
+              </div>
+              <label
+                >Giọng đọc từ file audio<select [(ngModel)]="voiceId">
+                  <option value="">Không sử dụng</option>
+                  @for (a of audio(); track a.id) {
+                    <option [value]="a.id">{{ a.name }}</option>
+                  }
+                </select></label
+              >
+              <label
+                >Nhạc nền · âm lượng 18%<select [(ngModel)]="musicId">
+                  <option value="">Không sử dụng</option>
+                  @for (a of audio(); track a.id) {
+                    <option [value]="a.id">{{ a.name }}</option>
+                  }
+                </select></label
+              >
+              <label
+                >Phụ đề SRT · UTF-8<select [(ngModel)]="subtitleId">
+                  <option value="">Không sử dụng</option>
+                  @for (a of subtitles(); track a.id) {
+                    <option [value]="a.id">{{ a.name }}</option>
+                  }
+                </select></label
+              >
+              <div class="hint">
+                Âm thanh gốc của clip sẽ được bỏ. Ảnh hiển thị 5 giây khi ghép; loop dùng đúng thời
+                lượng đã chọn. Chế độ ghép xuất tối đa thời lượng giới hạn.
+              </div>
+              <button
+                class="primary full"
+                (click)="render()"
+                [disabled]="busy() || selected().length === 0"
+              >
+                ▷ Tạo & chạy video
+              </button>
+            </section>
+            <section class="panel source">
+              <div class="panel-title">
+                <h2>Cảnh & thứ tự ghép</h2>
+                <span>{{ selected().length }} cảnh</span>
+              </div>
+              <label class="upload"
+                ><input
+                  type="file"
+                  multiple
+                  accept=".mp4,.mov,.mkv,.webm,.jpg,.jpeg,.png,.mp3,.wav,.m4a,.ogg,.srt"
+                  (change)="upload($event)"
+                  [disabled]="busy()"
+                /><b>＋ Nhập media</b
+                ><span>Ảnh, video, audio hoặc SRT · tối đa 250 MB / file</span></label
+              >
+              <div class="asset-list">
+                @for (a of media(); track a.id) {
+                  <button
+                    class="asset"
+                    [class.chosen]="selected().includes(a.id)"
+                    (click)="toggle(a.id)"
+                  >
+                    <span class="file-icon">{{ a.kind === 'image' ? '▧' : '▷' }}</span
+                    ><span
+                      >{{ a.name }}<small>{{ a.kind === 'image' ? 'Ảnh' : 'Video' }}</small></span
+                    ><span class="check">{{ selected().includes(a.id) ? '✓' : '＋' }}</span>
+                  </button>
+                } @empty {
+                  <div class="small-empty">Thêm media để bắt đầu xây dựng câu chuyện.</div>
+                }
+              </div>
+              @if (selected().length) {
+                <div class="sequence">
+                  <h3>Thứ tự xuất</h3>
+                  @for (id of selected(); track id; let i = $index) {
+                    <div>
+                      <span>{{ i + 1 }}. {{ name(id) }}</span
+                      ><button
+                        (click)="move(id, -1)"
+                        [disabled]="i === 0"
+                        aria-label="Đưa cảnh lên"
+                      >
+                        ↑</button
+                      ><button
+                        (click)="move(id, 1)"
+                        [disabled]="i === selected().length - 1"
+                        aria-label="Đưa cảnh xuống"
+                      >
+                        ↓
+                      </button>
+                    </div>
+                  }
+                </div>
+              }
+            </section>
+          </div>
+          <section class="panel queue">
+            <div class="panel-title">
+              <h2>Hàng đợi render</h2>
+              <span>Tự cập nhật mỗi 2,5 giây</span>
+            </div>
+            @for (j of jobs(); track j.id) {
+              <div class="job">
+                <span
+                  class="status"
+                  [class.done]="j.status === 'Succeeded'"
+                  [class.failed]="j.status === 'Failed'"
+                  >{{ status(j.status) }}</span
+                >
+                <div class="job-detail">
+                  <b>Video · {{ j.id.slice(0, 8) }}</b
+                  ><small>{{ j.message }}</small>
+                </div>
+                @if (j.status === 'Succeeded') {
+                  <button
+                    class="secondary"
+                    (click)="preview.set('/api/jobs/' + j.id + '/download')"
+                  >
+                    Xem</button
+                  ><a class="download" [href]="'/api/jobs/' + j.id + '/download'">Tải MP4 ↓</a>
+                }
+                @if (j.status === 'Failed') {
+                  <button class="secondary" (click)="retry(j.id)" [disabled]="busy()">
+                    Thử lại
+                  </button>
+                }
+              </div>
+            } @empty {
+              <div class="small-empty">
+                Video của bạn sẽ xuất hiện ở đây sau khi bấm Tạo & chạy.
+              </div>
+            }
+          </section>
+          @if (preview()) {
+            <section class="panel preview">
+              <div class="panel-title">
+                <h2>Bản xuất</h2>
+                <button (click)="preview.set('')">Đóng ×</button>
+              </div>
+              <video [src]="preview()" controls></video>
+            </section>
+          }
+        }
+      }
+      @if (tab() === 'library') {
+        <section class="panel">
+          <div class="panel-title">
+            <h2>Thư viện dự án</h2>
+            <span>{{ assets().length }} tài nguyên</span>
+          </div>
+          @if (projectId()) {
+            <label class="upload"
+              ><input type="file" multiple (change)="upload($event)" [disabled]="busy()" /><b
+                >＋ Thêm tài nguyên</b
+              ><span>Ảnh · video · audio · phụ đề</span></label
+            >
+          }
+          <div class="library">
+            @for (a of assets(); track a.id) {
+              <a
+                class="library-card"
+                [href]="'/api/assets/' + a.id + '/file'"
+                target="_blank"
+                rel="noopener"
+              >
+                @if (a.kind === 'image') {
+                  <img [src]="'/api/assets/' + a.id + '/file'" alt="" />
+                } @else {
+                  <div class="media-symbol">
+                    {{ a.kind === 'video' ? '▷' : a.kind === 'audio' ? '♫' : '≡' }}
+                  </div>
+                }
+                <b>{{ a.name }}</b
+                ><small>{{ a.kind }}</small></a
+              >
+            } @empty {
+              <div class="small-empty">
+                Chưa có tài nguyên. Hãy chọn hoặc tạo dự án rồi nhập file.
+              </div>
+            }
+          </div>
+        </section>
+      }
+      @if (tab() === 'script') {
+        <div class="script-grid">
+          <section class="panel">
+            <div class="panel-title">
+              <h2>Ý tưởng của bạn</h2>
+              <span>AI ASSISTANT</span>
+            </div>
+            <p>AI viết kịch bản 5 cảnh với gợi ý hình ảnh, lời đọc và prompt tạo video.</p>
+            <textarea
+              [(ngModel)]="idea"
+              maxlength="4000"
+              placeholder="Ví dụ: Video 45 giây giới thiệu góc làm việc tối giản, tiếng Việt, nhịp dựng nhẹ nhàng…"
+              aria-label="Ý tưởng video"
+            ></textarea>
+            @if (!aiEnabled()) {
+              <div class="hint">
+                Chưa kết nối AI. Cấu hình OPENAI_API_KEY ở backend rồi khởi động lại. API có thể
+                tính phí.
+              </div>
+            }
+            <button
+              class="primary"
+              (click)="generateScript()"
+              [disabled]="busy() || !aiEnabled() || !idea.trim()"
+            >
+              {{ busy() ? 'Đang viết…' : '✧ Viết kịch bản' }}
+            </button>
+          </section>
+          <section class="panel">
+            <div class="panel-title">
+              <h2>Kịch bản</h2>
+              <span>Chỉnh sửa được</span>
+            </div>
+            <textarea
+              class="script-output"
+              [ngModel]="script()"
+              (ngModelChange)="script.set($event)"
+              placeholder="Kịch bản AI sẽ xuất hiện tại đây. Kịch bản chưa tự tạo media hoặc đưa vào timeline."
+              aria-label="Kịch bản"
+            ></textarea>
+            <p class="hint">
+              Kịch bản hiện chỉ nằm trong phiên làm việc. Sao chép nội dung trước khi tải lại trang.
+            </p>
+          </section>
+        </div>
+      }
+      @if (tab() === 'roadmap') {
+        <section class="panel roadmap">
+          <h2>Đã hoạt động trong v0.1</h2>
+          <p>
+            Quản lý dự án và media, ghép ảnh/video, loop trực tiếp, audio từ file, phụ đề SRT, hàng
+            đợi lưu SQLite và tải MP4. Viết kịch bản AI khi có API key.
+          </p>
+          <h2>Giai đoạn tiếp theo</h2>
+          <p>1. Tạo giọng đọc và nhận diện phụ đề qua API.</p>
+          <p>2. Tạo ảnh/video AI từng cảnh, theo dõi request và ngân sách.</p>
+          <p>3. Storyboard lưu bền vững, timeline trim/split và preview proxy.</p>
+          <p>4. Loop crossfade/ping-pong và kiểm tra mối nối.</p>
+          <p>5. Cắt video theo transcript và xuất nhiều phiên bản.</p>
+          <p class="hint">
+            Tạo video AI, TTS, loop liền mạch, editor timeline và đăng mạng xã hội chưa có trong bản
+            này.
+          </p>
+        </section>
+      }
+    </main>
+    <footer>FLOWVIDEO STUDIO <span>Made for your next story.</span></footer>
+  </div>
+</div>
