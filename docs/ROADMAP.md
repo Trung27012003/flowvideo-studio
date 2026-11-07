@@ -142,7 +142,7 @@ Thời gian là dự trù cho một dev làm tập trung, cần điều chỉnh 
 - [x] Contract tests mô phỏng và render/browser thật; nguồn tham khảo và giới hạn: [VIDEO-AI](VIDEO-AI.md).
 - [ ] Kiểm tra tài khoản/model/chất lượng/giá bằng API key thật của người dùng.
 - [x] Durable workflow từ storyboard/kịch bản → tư liệu + giọng → dựng đã có ở v0.13.
-- [ ] Ý tưởng → AI phân cảnh có cấu trúc → toàn bộ video.
+- [x] Ý tưởng → AI phân cảnh có cấu trúc → duyệt → storyboard → workflow đã có ở v0.14.
 - [x] Loop reverse/ping-pong/crossfade đã có ở v0.13.
 - [ ] Timeline nhiều track; nhiều ảnh tham chiếu và video editing/extension.
 
@@ -153,3 +153,12 @@ Thời gian là dự trù cho một dev làm tập trung, cần điều chỉnh 
 - [x] Idempotency, cancel owned queued jobs, Unknown không replay AI, local resume, retry render, snapshot/apply.
 - [x] Reverse/ping-pong/crossfade với bounds và kiểm chứng frame thật.
 - [x] [Production workflow](PRODUCTION.md), [Loops](LOOPS.md), integration/browser kiểm chứng.
+
+## V0.14 — Story Architect và QA đã có
+
+- [x] Structured Outputs, proposal/scene direction, immutable source/original và editable review.
+- [x] Quota/cache/idempotency/usage, queued cancel/restart Unknown, revision/version apply, import/export offline.
+- [x] Technical render QA trước Succeeded, metadata/SRT checks, report/recheck/export.
+- [x] [Hướng dẫn và mức kiểm chứng](STORY-ARCHITECT.md).
+- [ ] Ngân sách tiền/đối soát hóa đơn và backup/restore toàn bộ media/DB.
+- [ ] Character/location reference library, timeline tối thiểu, overlay, word alignment, publishing.

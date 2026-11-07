@@ -274,6 +274,14 @@
               ><button (click)="remove(scene.id)" aria-label="Xóa cảnh storyboard">Xóa</button>
             </div>
           </div>
+          @if (scene.direction; as d) {
+            <p class="hint">
+              Đạo diễn: {{ d.shot }} · {{ d.camera }} · {{ d.lighting }} · {{ d.location }}<br />{{
+                d.characters
+              }}
+              · {{ d.purpose }}
+            </p>
+          }
           <app-scene-options
             (focusin)="beginEdit()"
             (focusout)="endEdit()"

@@ -144,3 +144,11 @@ Giọng từng cảnh được lưu trước bước local kế tiếp. Preparin
 LoopOptions là trường optional của RenderRequest, không thêm vào StoryDocument mode concat. Normalize trước, tạo cycle file nếu reverse/pingpong/crossfade rồi stream-loop như trước. Reverse/pingpong ≤8 giây/720p; crossfade ≤30 giây; kiểm tra trước normalize để tránh buffer nguồn dài. Pingpong bỏ endpoint frames trùng. Crossfade trim head/body, reset PTS/timebase/fps và blend đuôi/đầu; cycle xấp xỉ L-fade. Render output duration độc lập với cycle duration.
 
 Lịch sử editor gom thay đổi khi gõ trong một ô; thao tác cấu trúc/batch luôn tạo entry riêng, undo/redo kết thúc nhóm focus. Điều này tránh bỏ qua entry thay media khi flag focus còn tồn tại do disabled/async UI.
+
+## v0.14: story proposals và QA
+
+StoryPlans lưu request/source/model/fingerprint, original/draft, revision, status và token usage. Provider dùng Chat Completions strict JSON schema; parse bounded rồi kiểm tra required keys và DTO constraints độc lập. Worker claim Queued bằng conditional UPDATE, Running sau restart → Unknown; không sửa document trong worker. Review/apply dùng optimistic revision/version; apply chỉ thay script/scenes và giữ render settings. Origin=import không có provider usage và không tính quota AI.
+
+SceneDirection optional trên StoryScene giữ tương thích JSON cũ. VisualPrompt ghép metadata vào prompt ảnh/video ở cả endpoint riêng lẻ và ProductionWorkflow trước fingerprint. Purpose chỉ lưu metadata. Editor dùng client keys ổn định qua reorder/clone, loại bỏ keys trước gửi DTO.
+
+RenderQaReports keyed JobId lưu báo cáo point-in-time/recipe hash. RenderWorker inspect bằng ffprobe/SRT sau render trước Succeeded, lỗi đi nhánh Failed/dọn file. Manual POST chỉ cho Succeeded; GET có thể đọc báo cáo lỗi đã lưu. Upsert SQLite atomic, semaphore 2 và probe timeout 20 giây. Duration tolerance tính cả ngân sách frame từng clip; concat không có explicit Scenes chỉ kiểm tra giới hạn tối đa. Không đánh giá nội dung, decode toàn stream hay tự sửa file.

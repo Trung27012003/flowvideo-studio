@@ -69,6 +69,8 @@ public class StudioDb(DbContextOptions<StudioDb> options) : DbContext(options)
 {
     public DbSet<AssetPreference> AssetPreferences => Set<AssetPreference>();
     public DbSet<SavedWorkspaceItem> SavedWorkspaceItems => Set<SavedWorkspaceItem>();
+    public DbSet<RenderQaReport> RenderQaReports => Set<RenderQaReport>();
+    public DbSet<StoryPlan> StoryPlans => Set<StoryPlan>();
     public DbSet<ProductionRun> ProductionRuns => Set<ProductionRun>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<Asset> Assets => Set<Asset>();
@@ -86,6 +88,14 @@ public class StudioDb(DbContextOptions<StudioDb> options) : DbContext(options)
         b.Entity<ProductionRun>().HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId);
         b.Entity<ProductionRun>().HasIndex(x => new { x.ProjectId, x.CreatedAt });
         b.Entity<ProductionRun>().HasIndex(x => new { x.Status, x.CreatedAt });
+        b.Entity<StoryPlan>().HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId);
+        b.Entity<StoryPlan>().HasIndex(x => new { x.ProjectId, x.CreatedAt });
+        b.Entity<StoryPlan>().HasIndex(x => new { x.Status, x.CreatedAt });
+        b.Entity<RenderQaReport>().HasKey(x => x.JobId);
+        b.Entity<RenderQaReport>()
+            .HasOne<RenderJob>()
+            .WithOne()
+            .HasForeignKey<RenderQaReport>(x => x.JobId);
         b.Entity<AssetPreference>().HasKey(x => x.AssetId);
         b.Entity<AssetPreference>()
             .HasOne<Asset>()

@@ -160,7 +160,7 @@ public static class ImageFeatures
                     var size = doc.Ratio == "16:9" ? "1536x1024" : "1024x1536";
                     var fingerprint = GenerationKeys.Image(
                         req.SceneId,
-                        scene.Prompt.Trim(),
+                        SceneDirection.VisualPrompt(scene),
                         model,
                         size,
                         "low"
@@ -220,7 +220,7 @@ public static class ImageFeatures
                         ProjectId = id,
                         SceneId = req.SceneId,
                         DocumentVersion = req.Version,
-                        Prompt = scene.Prompt.Trim(),
+                        Prompt = SceneDirection.VisualPrompt(scene),
                         Fingerprint = fingerprint,
                         Model = model,
                         Size = size,

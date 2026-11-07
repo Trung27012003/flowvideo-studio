@@ -2431,6 +2431,341 @@ async function waitForJobs(page, project, predicate) {
       "PASS v0.13 browser: real offline production plan/start/render/preview/snapshot/apply/cancel; draft isolation and real reverse/pingpong/crossfade UI exports",
     );
 
+    // Offline import/review/apply and QA use the real backend. AI queue UI alone is mocked below.
+    await page
+      .getByRole("button", { name: "Kịch bản AI", exact: true })
+      .click();
+    const architect = page.locator("app-story-architect");
+    const blueprint = {
+      title: "Offline structured proposal",
+      audience: "Developers",
+      message: "Useful editing",
+      hook: "An opening",
+      ending: "A closing",
+      scenes: [
+        {
+          title: "Proposal one",
+          narration: "Lời cảnh một",
+          prompt: "A teal room",
+          duration: 0.5,
+          direction: {
+            shot: "wide",
+            camera: "pan",
+            lighting: "Soft light",
+            location: "Studio",
+            characters: "Developer",
+            purpose: "Introduction",
+          },
+        },
+        {
+          title: "Proposal two",
+          narration: "Lời cảnh hai",
+          prompt: "A blue room",
+          duration: 0.6,
+          direction: {
+            shot: "close",
+            camera: "static",
+            lighting: "Warm light",
+            location: "Studio",
+            characters: "Developer",
+            purpose: "Ending",
+          },
+        },
+      ],
+    };
+    const blueprintFile = path.join(temp, "story-proposal.json");
+    await fs.writeFile(
+      blueprintFile,
+      JSON.stringify({
+        format: "flowvideo.story-plan",
+        schemaVersion: 1,
+        proposal: blueprint,
+      }),
+    );
+    const beforeArchitect = await (
+      await page.request.get(
+        "http://127.0.0.1:5099/api/projects/" + productionProject + "/document",
+      )
+    ).json();
+    await architect
+      .getByLabel("Nhập phân cảnh JSON", { exact: true })
+      .setInputFiles(blueprintFile);
+    await page
+      .getByRole("status")
+      .filter({ hasText: "Đã nhập bản phân cảnh để duyệt" })
+      .waitFor();
+    const review = architect.locator("fieldset.review");
+    await review
+      .getByLabel("Lời đọc đề xuất", { exact: true })
+      .first()
+      .fill("Đã duyệt lời đọc");
+    await review
+      .getByLabel("Cỡ cảnh đề xuất", { exact: true })
+      .first()
+      .selectOption("close");
+    await review
+      .getByLabel("Máy quay đề xuất", { exact: true })
+      .first()
+      .selectOption("tilt");
+    await review
+      .getByRole("button", { name: "Nhân bản cảnh đề xuất", exact: true })
+      .first()
+      .click();
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll("app-story-architect .scene-review")
+          .length === 3,
+    );
+    assert.equal(await review.locator(".scene-review").count(), 3);
+    await review
+      .getByRole("button", { name: "Xóa cảnh đề xuất", exact: true })
+      .nth(1)
+      .click();
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll("app-story-architect .scene-review")
+          .length === 2,
+    );
+    await review
+      .getByRole("button", { name: "Đưa cảnh đề xuất xuống", exact: true })
+      .first()
+      .click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector(
+          'app-story-architect .scene-review input[aria-label="Tên cảnh đề xuất"]',
+        )?.value === "Proposal two",
+    );
+    await review
+      .getByRole("button", { name: "Đưa cảnh đề xuất lên", exact: true })
+      .nth(1)
+      .click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector(
+          'app-story-architect .scene-review input[aria-label="Tên cảnh đề xuất"]',
+        )?.value === "Proposal one",
+    );
+    assert.equal(
+      await review
+        .getByLabel("Tên cảnh đề xuất", { exact: true })
+        .first()
+        .inputValue(),
+      "Proposal one",
+    );
+    await review
+      .getByRole("button", { name: "Lưu bản sửa phân cảnh", exact: true })
+      .click();
+    await page
+      .getByRole("status")
+      .filter({ hasText: "Đã lưu bản sửa phân cảnh" })
+      .waitFor();
+    const plans = await (
+      await page.request.get(
+        "http://127.0.0.1:5099/api/projects/" +
+          productionProject +
+          "/story-plans",
+      )
+    ).json();
+    const importedPlan = plans.items.find((p) => p.origin === "import");
+    assert(importedPlan);
+    assert.equal(plans.used, 0);
+    assert.equal(importedPlan.revision, 2);
+    const unchangedArchitect = await (
+      await page.request.get(
+        "http://127.0.0.1:5099/api/projects/" + productionProject + "/document",
+      )
+    ).json();
+    assert.deepEqual(unchangedArchitect, beforeArchitect);
+    const planExport = page.waitForEvent("download");
+    await architect
+      .getByRole("link", { name: "Tải bản phân cảnh JSON", exact: true })
+      .click();
+    const exportedPlan = JSON.parse(
+      await fs.readFile(await (await planExport).path(), "utf8"),
+    );
+    assert.equal(exportedPlan.original.scenes[0].narration, "Lời cảnh một");
+    assert.equal(
+      exportedPlan.plan.proposal.scenes[0].narration,
+      "Đã duyệt lời đọc",
+    );
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+      false,
+      "Architect mobile overflow",
+    );
+    await page.setViewportSize({ width: 1440, height: 1050 });
+    await page.screenshot({
+      path: path.join(root, "test-results/story-architect.png"),
+      fullPage: true,
+    });
+    await review
+      .getByRole("button", { name: "Lưu và áp dụng storyboard", exact: true })
+      .click();
+    await page
+      .getByRole("status")
+      .filter({ hasText: "Đã áp dụng bản phân cảnh đã duyệt" })
+      .waitFor();
+    assert.equal(
+      await board
+        .getByLabel("Lời của cảnh", { exact: true })
+        .first()
+        .inputValue(),
+      "Đã duyệt lời đọc",
+    );
+    assert((await board.innerText()).includes("close · tilt"));
+    const appliedArchitect = await (
+      await page.request.get(
+        "http://127.0.0.1:5099/api/projects/" + productionProject + "/document",
+      )
+    ).json();
+    assert.equal(appliedArchitect.document.scenes[0].direction.camera, "tilt");
+    assert(appliedArchitect.document.scenes.every((s) => s.assetId === null));
+    await board
+      .getByRole("button", { name: "Điền tư liệu còn thiếu", exact: true })
+      .click();
+    const beforeQaJobs = (
+      await (
+        await page.request.get(
+          "http://127.0.0.1:5099/api/projects/" + productionProject + "/jobs",
+        )
+      ).json()
+    ).map((j) => j.id);
+    await board
+      .getByRole("button", { name: "Lưu & dựng storyboard", exact: true })
+      .click();
+    const afterQaJobs = await waitForJobs(page, productionProject, (jobs) =>
+      jobs.some(
+        (j) => !beforeQaJobs.includes(j.id) && j.status === "Succeeded",
+      ),
+    );
+    const qaJob = afterQaJobs.find((j) => !beforeQaJobs.includes(j.id));
+    assert(qaJob);
+    await page
+      .locator(".job-detail b")
+      .filter({ hasText: qaJob.id.slice(0, 8) })
+      .waitFor();
+    const qaRow = page.locator(".job").filter({
+      has: page
+        .locator(".job-detail b")
+        .filter({ hasText: qaJob.id.slice(0, 8) }),
+    });
+    await qaRow
+      .getByRole("button", { name: "Kiểm tra QA", exact: true })
+      .click();
+    const qaPanel = page.locator('section[aria-label="Báo cáo QA"]');
+    await qaPanel
+      .getByRole("heading", { name: "QA kỹ thuật · Đạt", exact: true })
+      .waitFor();
+    const qaDownload = page.waitForEvent("download");
+    await qaPanel
+      .getByRole("button", { name: "Tải báo cáo QA JSON", exact: true })
+      .click();
+    const qaJson = JSON.parse(
+      await fs.readFile(await (await qaDownload).path(), "utf8"),
+    );
+    assert.equal(qaJson.jobId, qaJob.id);
+    assert.equal(qaJson.result, "Passed");
+    assert.equal(qaJson.fullDecode, false);
+    assert(
+      qaJson.checks.some(
+        (c) => c.code === "frame-rate" && c.severity === "pass",
+      ),
+    );
+    await page.screenshot({
+      path: path.join(root, "test-results/render-qa.png"),
+      fullPage: true,
+    });
+    await qaPanel.getByRole("button", { name: "Đóng QA", exact: true }).click();
+    // UI AI request/cancel contract: no real key or paid request is used.
+    let plannerFake = null,
+      plannerPayload = null;
+    await page.route("**/api/capabilities", async (route) => {
+      const response = await route.fetch();
+      const caps = await response.json();
+      await route.fulfill({
+        json: { ...caps, imageAi: true, aiVideo: true, scriptAi: true },
+      });
+    });
+    const planRoute = "**/api/projects/" + productionProject + "/story-plans";
+    await page.route(planRoute, async (route) => {
+      if (route.request().method() === "POST") {
+        plannerPayload = route.request().postDataJSON();
+        plannerFake = {
+          id: plannerPayload.requestId,
+          status: "Queued",
+          message: "Queued contract fixture",
+          documentVersion: plannerPayload.version,
+          revision: 0,
+          model: "contract-fixture",
+          origin: "ai",
+          inputTokens: null,
+          outputTokens: null,
+          proposal: null,
+        };
+        await route.fulfill({
+          status: 202,
+          json: { plan: plannerFake, reused: false },
+        });
+      } else {
+        const response = await route.fetch();
+        const data = await response.json();
+        await route.fulfill({
+          json: {
+            ...data,
+            items: plannerFake ? [plannerFake, ...data.items] : data.items,
+          },
+        });
+      }
+    });
+    await page.route(planRoute + "/*/cancel", async (route) => {
+      plannerFake.status = "Canceled";
+      await route.fulfill({ json: { canceled: true } });
+    });
+    await page.reload();
+    await page
+      .getByRole("button", { name: "Kịch bản AI", exact: true })
+      .click();
+
+    await architect.getByLabel("Số cảnh AI", { exact: true }).fill("2");
+    await architect
+      .getByLabel("Tổng giây phân cảnh", { exact: true })
+      .fill("2");
+    await architect
+      .getByLabel("Thể loại phân cảnh", { exact: true })
+      .selectOption("education");
+    await architect
+      .getByLabel("Cấu trúc câu chuyện", { exact: true })
+      .selectOption("three-act");
+    await architect
+      .getByLabel("Phong cách phân cảnh", { exact: true })
+      .fill("cinematic");
+    await page
+      .getByLabel("Ý tưởng video", { exact: true })
+      .fill("Explain C# async in two shots");
+    await architect
+      .getByRole("button", { name: "Tạo bản phân cảnh", exact: true })
+      .click();
+    await architect
+      .getByRole("button", { name: "Hủy phân cảnh chưa gửi", exact: true })
+      .waitFor();
+    assert.equal(plannerPayload.sceneCount, 2);
+    assert.equal(plannerPayload.duration, 2);
+    assert.equal(plannerPayload.structure, "three-act");
+    assert.equal(plannerPayload.style, "cinematic");
+    assert(plannerPayload.version > 0);
+    await architect
+      .getByRole("button", { name: "Hủy phân cảnh chưa gửi", exact: true })
+      .click();
+    await architect.getByText("Đã hủy", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Storyboard", exact: true }).click();
+    console.log(
+      "PASS v0.14 browser: real offline proposal import/review/reorder/save/export/apply with direction metadata and draft isolation; real render plus automatic/manual QA/report download; AI planner enqueue/cancel UI mocked",
+    );
+
     await page.evaluate(() => scrollTo(0, 0));
     await page.screenshot({
       path: path.join(root, "test-results/imported.png"),

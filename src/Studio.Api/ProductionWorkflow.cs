@@ -268,7 +268,7 @@ public static class ProductionWorkflow
                 if (string.IsNullOrWhiteSpace(scene.Prompt))
                     throw new ProductionError("Cảnh cần prompt để tạo tư liệu AI.");
                 provider = req.Media;
-                var prompt = scene.Prompt.Trim();
+                var prompt = SceneDirection.VisualPrompt(scene);
                 if (provider == "images")
                 {
                     var model = config["OPENAI_IMAGE_MODEL"] ?? "gpt-image-1";

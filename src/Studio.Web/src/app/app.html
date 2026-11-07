@@ -68,7 +68,7 @@
         ></span
       >
       <div class="header-right">
-        <span class="pill">MVP v0.13</span
+        <span class="pill">MVP v0.14</span
         ><select
           aria-label="Chọn dự án"
           [ngModel]="projectId()"
@@ -408,6 +408,7 @@
                   <button class="secondary" (click)="repeatJob(j.id)" [disabled]="busy()">
                     Dựng lại bản hoàn tất
                   </button>
+                  <button (click)="inspectQuality(j.id)" [disabled]="busy()">Kiểm tra QA</button>
                   <button
                     class="secondary"
                     (click)="preview.set('/api/jobs/' + j.id + '/download')"
@@ -484,6 +485,37 @@
               }
             </details>
           </section>
+          @if (qaReport(); as report) {
+            <section class="panel" aria-label="Báo cáo QA">
+              <h3>
+                QA kỹ thuật ·
+                {{
+                  report.result === 'Passed'
+                    ? 'Đạt'
+                    : report.result === 'Warnings'
+                      ? 'Có cảnh báo'
+                      : 'Chưa đạt'
+                }}
+              </h3>
+              <p>
+                Kiểm tra thông số bằng ffprobe và sidecar SRT; chưa giải mã toàn video hoặc đánh giá
+                nội dung/hình ảnh bằng AI.
+              </p>
+              <ul>
+                @for (check of report.checks; track check.code) {
+                  <li>
+                    {{ check.severity === 'pass' ? '✓' : check.severity === 'warning' ? '⚠' : '✗' }}
+                    {{ check.message }}
+                    @if (check.expected) {
+                      · mong đợi {{ check.expected }}, thực tế {{ check.actual ?? 'không có' }}
+                    }
+                  </li>
+                }
+              </ul>
+              <button (click)="exportQuality()">Tải báo cáo QA JSON</button
+              ><button (click)="qaReport.set(null)">Đóng QA</button>
+            </section>
+          }
           @if (preview()) {
             <section class="panel preview">
               <div class="panel-title">
@@ -677,6 +709,24 @@
         </section>
       }
       @if (tab() === 'script') {
+        @if (projectId()) {
+          <app-story-architect
+            [rows]="storyPlans()"
+            [projectId]="projectId()"
+            [enabled]="aiEnabled()"
+            [disabled]="busy() || !documentLoaded()"
+            [used]="storyUsed()"
+            [limit]="storyLimit()"
+            (generate)="createStoryPlan($event)"
+            (importPlan)="importStoryPlan($event)"
+            (refresh)="refreshStoryHistory()"
+            (open)="openStoryPlan($event)"
+            (save)="editStoryPlan($event, false)"
+            (apply)="editStoryPlan($event, true)"
+            (cancel)="cancelStoryPlan($event)"
+          />
+        }
+
         <div class="script-grid">
           <section class="panel">
             <div class="panel-title">
@@ -1238,19 +1288,20 @@
       }
       @if (tab() === 'roadmap') {
         <section class="panel roadmap">
-          <h2>Đã hoạt động trong v0.13</h2>
+          <h2>Đã hoạt động trong v0.14</h2>
           <p>
-            v0.13 thêm quy trình một nút từ storyboard/kịch bản đến tư liệu, giọng và bản dựng; loop
-            reverse/ping-pong/crossfade. Có tạo video AI từ prompt/ảnh tham chiếu qua Gemini, tạo
-            nhiều cảnh, xử lý giọng/nhạc riêng, công cụ WAV/FLAC/MP4 tắt tiếng/GIF/poster/bảng
-            ảnh/gói giao video và kiểm tra thông số. Có viết hoa đầu câu, dấu câu, bỏ emoji, tìm/lấy
-            đoạn/ghép SRT và xuất CSV. Quản lý dự án và media, cắt điểm vào/ra từng clip, ghép
-            ảnh/video, loop trực tiếp, audio từ file, phụ đề SRT, hàng đợi lưu SQLite và tải MP4.
-            Viết kịch bản, tạo giọng đọc và nhận diện phụ đề AI khi có API key. Chỉnh sửa SRT không
-            cần AI.
+            v0.14 thêm phân cảnh JSON từ ý tưởng/kịch bản, duyệt/sửa và áp dụng với metadata đạo
+            diễn, nhập JSON offline và QA kỹ thuật sau render. Đã có quy trình một nút từ
+            storyboard/kịch bản đến tư liệu, giọng và bản dựng; loop reverse/ping-pong/crossfade. Có
+            tạo video AI từ prompt/ảnh tham chiếu qua Gemini, tạo nhiều cảnh, xử lý giọng/nhạc
+            riêng, công cụ WAV/FLAC/MP4 tắt tiếng/GIF/poster/bảng ảnh/gói giao video và kiểm tra
+            thông số. Có viết hoa đầu câu, dấu câu, bỏ emoji, tìm/lấy đoạn/ghép SRT và xuất CSV.
+            Quản lý dự án và media, cắt điểm vào/ra từng clip, ghép ảnh/video, loop trực tiếp, audio
+            từ file, phụ đề SRT, hàng đợi lưu SQLite và tải MP4. Viết kịch bản, tạo giọng đọc và
+            nhận diện phụ đề AI khi có API key. Chỉnh sửa SRT không cần AI.
           </p>
           <h2>Giai đoạn tiếp theo</h2>
-          <p>1. Phân cảnh AI có cấu trúc từ ý tưởng và alignment từng từ.</p>
+          <p>1. Hồ sơ nhân vật/bối cảnh và alignment phụ đề từng từ.</p>
           <p>2. Sửa/extend video AI, nhiều ảnh tham chiếu và theo dõi chi phí.</p>
           <p>3. Timeline nhiều track và preview proxy (đã có tách đôi cảnh).</p>
           <p>4. Preview mối nối và gợi ý điểm loop tự động.</p>

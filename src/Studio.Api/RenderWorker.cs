@@ -46,6 +46,11 @@ public class RenderWorker(
                     try
                     {
                         await Render(job, db, cancellation.Token);
+                        var qa = await RenderQuality.Inspect(job, db, store, cancellation.Token);
+                        if (qa.Result == "Failed")
+                            throw new IOException(
+                                "Bản xuất không qua QA kỹ thuật; xem báo cáo QA."
+                            );
                         var completed = await db
                             .Jobs.Where(x => x.Id == job.Id && x.Status == "Running")
                             .ExecuteUpdateAsync(

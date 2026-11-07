@@ -1,3 +1,4 @@
+import type { DirectionBlueprint } from './story-architect';
 import { AudioOptions, defaultAudioTuning } from './audio-options';
 import { CaptionOptions, defaultCaptionStyle } from './caption-options';
 import { SceneOptionsEditor, SceneOptions, defaultSceneOptions } from './scene-options';
@@ -27,6 +28,7 @@ export interface SceneDraft {
   duration: number;
   start: number;
   options?: SceneOptions | null;
+  direction?: DirectionBlueprint | null;
 }
 @Component({
   selector: 'app-storyboard',

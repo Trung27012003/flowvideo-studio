@@ -30,12 +30,20 @@ builder.Services.AddScoped<VideoProvider>();
 builder.Services.AddHostedService<VideoWorker>();
 builder.Services.AddSingleton<ProductionGate>();
 builder.Services.AddHostedService<ProductionWorker>();
+builder.Services.AddSingleton<StoryPlanGate>();
+builder
+    .Services.AddHttpClient("OpenAiStory", client => client.Timeout = TimeSpan.FromSeconds(90))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddScoped<StoryPlanProvider>();
+builder.Services.AddHostedService<StoryPlanWorker>();
 var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<StudioDb>();
     await db.Database.EnsureCreatedAsync();
     await Storyboard.Upgrade(db);
+    await StoryPlans.Upgrade(db);
+    await RenderQuality.Upgrade(db);
     await ImageFeatures.Upgrade(db);
     await VideoFeatures.Upgrade(db);
     await ProductionWorkflow.Upgrade(db);
@@ -50,7 +58,7 @@ using (var scope = app.Services.CreateScope())
 }
 app.UseDefaultFiles();
 app.UseStaticFiles();
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.13.0" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.14.0" }));
 app.MapGet(
     "/api/capabilities",
     (IConfiguration c) =>
@@ -444,6 +452,8 @@ app.MapPost(
 );
 app.MapAudio();
 app.MapStoryboard();
+app.MapStoryPlans();
+app.MapRenderQuality();
 app.MapImages();
 app.MapVideos();
 app.MapProduction();

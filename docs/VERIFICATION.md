@@ -1,4 +1,4 @@
-# Kiểm chứng bản v0.13
+# Kiểm chứng bản v0.14
 
 Đã chạy trong môi trường Linux với .NET SDK 10.0.403, Node.js 24 và FFmpeg:
 
@@ -40,7 +40,7 @@ Phép đo trước/sau và giới hạn diễn giải xem tại [PERFORMANCE.md]
 - Startup đánh dấu Running Unknown, chỉ tiếp tục Queued. Kiểm tra thiếu key, phiên bản cũ, prompt rỗng và dọn file.
 - Browser dùng capability/image job API mô phỏng để kiểm tra queued/succeeded, chọn ảnh vào cảnh và dựng thật. Không có API key thật hoặc yêu cầu tính phí trong test.
 
-Tổng bộ integration tests hiện có 104 trường hợp. Chưa kiểm chứng chất lượng ảnh/quyền model/độ trễ thực tế bằng tài khoản OpenAI của người dùng.
+Tổng bộ integration tests hiện có 122 trường hợp. Chưa kiểm chứng chất lượng ảnh/quyền model/độ trễ thực tế bằng tài khoản OpenAI của người dùng.
 
 ## Đợt 10 chức năng
 
@@ -128,3 +128,11 @@ Tổng **104 integration tests .NET**, **22 Node tests**, full FFmpeg smoke và 
 - Các bài có AI dùng HTTP handler mô phỏng, trả PNG/MP3/MP4 thật để decode/probe/render. Không gọi dịch vụ AI tính phí. Quyền model, chất lượng tạo sinh và giá thực tế chưa được kiểm tra.
 
 Lệnh giữ như trước. Xem [Production](PRODUCTION.md), [Loops](LOOPS.md) cho cách dùng, giới hạn và các nguồn chính thức đã đối chiếu.
+
+## v0.14
+
+14 test cases StoryPlan + 4 Quality; tổng .NET 122, Node 22. Story tests dùng provider mô phỏng để kiểm tra strict schema/header/model/limits, original/review/apply, revisions/source immutability, cache/quota/idempotency, missing key/options/scope, errors/refusal/truncation/missing/extra/count/duration, Unknown/restart, queued cancel, import không tốn quota. QA tests render FFmpeg thật và kiểm tra report tự tạo trước Succeeded, recipe SHA-256/recheck/upsert, audio/mono/SRT overflow warning, output sai kích thước/duration, corrupt/missing, nonterminal và direction validation.
+
+Browser dùng import/review/save/export/apply thật, giữ document trước apply, reorder/duplicate/remove scene không tráo form fields, metadata direction đi qua storyboard → render, automatic/manual QA và JSON download, mobile layout. Phần enqueue/cancel AI planner UI được route-mock; hợp đồng provider kiểm tra ở .NET. Toàn bộ browser regression v0.7–v0.13 và FFmpeg DSP/pixel smoke tiếp tục chạy. Không có key thật/yêu cầu AI tính phí.
+
+Nguồn và mức giới hạn QA: [STORY-ARCHITECT](STORY-ARCHITECT.md).

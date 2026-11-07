@@ -197,7 +197,7 @@ public static class VideoFeatures
                     var size = doc.Ratio;
                     var fingerprint = GenerationKeys.Video(
                         req.SceneId,
-                        scene.Prompt.Trim(),
+                        SceneDirection.VisualPrompt(scene),
                         model,
                         size,
                         req.Resolution,
@@ -259,7 +259,7 @@ public static class VideoFeatures
                         ProjectId = id,
                         SceneId = req.SceneId,
                         DocumentVersion = req.Version,
-                        Prompt = scene.Prompt.Trim(),
+                        Prompt = SceneDirection.VisualPrompt(scene),
                         Fingerprint = fingerprint,
                         Model = model,
                         Size = size,

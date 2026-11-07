@@ -1,3 +1,4 @@
+import { StoryArchitect, StoryPlanView, StoryPlanOptions, StoryPlanEdit } from './story-architect';
 import { ProductionStudio, ProductionOptions, ProductionView } from './production-studio';
 import { VideoStudio, VideoRow, VideoRequestOptions } from './video-studio';
 import { AudioOptions, defaultAudioTuning } from './audio-options';
@@ -55,6 +56,7 @@ interface Job {
     AudioOptions,
     VideoStudio,
     ProductionStudio,
+    StoryArchitect,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
@@ -74,6 +76,12 @@ export class App implements OnInit, OnDestroy {
   subtitles = computed(() => this.assets().filter((a) => a.kind === 'subtitle'));
   media = computed(() => this.assets().filter((a) => a.kind === 'video' || a.kind === 'image'));
   aiEnabled = signal(false);
+  @ViewChild(StoryArchitect) architect?: StoryArchitect;
+  storyPlans = signal<StoryPlanView[]>([]);
+  storyUsed = signal(0);
+  storyLimit = signal(10);
+  private storyRequestVersion = 0;
+  qaReport = signal<any>(null);
   productionRuns = signal<ProductionView[]>([]);
   productionEstimate = signal<any>(null);
   private productionRequestVersion = 0;
@@ -294,6 +302,7 @@ export class App implements OnInit, OnDestroy {
     clearTimeout(this.timer);
     if (this.destroyed) return;
     const active =
+      this.storyPlans().some((p) => ['Queued', 'Running'].includes(p.status)) ||
       this.productionRuns().some((r) =>
         ['WaitingAssets', 'Speaking', 'Preparing', 'Rendering'].includes(r.status),
       ) ||
@@ -311,6 +320,7 @@ export class App implements OnInit, OnDestroy {
             this.refreshImages(),
             this.refreshVideos(),
             this.refreshProduction(),
+            this.refreshStoryPlans(),
           ]);
           this.syncError.set(false);
         } catch {
@@ -419,6 +429,10 @@ export class App implements OnInit, OnDestroy {
     this.imageJobs.set([]);
     this.videoJobs.set([]);
     this.productionRuns.set([]);
+    this.storyPlans.set([]);
+    this.storyUsed.set(0);
+    this.qaReport.set(null);
+    this.architect?.close();
     this.productionEstimate.set(null);
     this.productionSignature = '';
     this.videoUsed.set(0);
@@ -442,6 +456,7 @@ export class App implements OnInit, OnDestroy {
       this.refreshImages(),
       this.refreshVideos(),
       this.refreshProduction(),
+      this.refreshStoryPlans(),
       this.refreshSavedItems(),
       this.refreshPreferences(),
       this.api('/projects/' + id + '/document').then((result) => {
@@ -466,6 +481,123 @@ export class App implements OnInit, OnDestroy {
     const jobs = await this.api('/projects/' + id + '/jobs');
     if (id === this.projectId() && version === this.requestVersion && !this.destroyed)
       this.jobs.set(jobs);
+  }
+  async refreshStoryPlans() {
+    const id = this.projectId(),
+      version = ++this.storyRequestVersion;
+    const result = await this.api('/projects/' + id + '/story-plans');
+    if (id !== this.projectId() || version !== this.storyRequestVersion || this.destroyed) return;
+    this.storyPlans.set(result.items);
+    this.storyUsed.set(result.used);
+    this.storyLimit.set(result.dailyLimit);
+  }
+  async createStoryPlan(options: StoryPlanOptions) {
+    await this.perform(async () => {
+      const version = await this.storeDocument();
+      const result = await this.api('/projects/' + this.projectId() + '/story-plans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...options, requestId: crypto.randomUUID(), version }),
+      });
+      await this.refreshStoryPlans();
+      this.schedulePoll();
+      this.notice.set(
+        result.reused
+          ? 'Đã dùng lại bản phân cảnh. Chọn xem/sửa để duyệt.'
+          : 'Đã xếp hàng phân cảnh. Storyboard đang sửa chưa bị thay đổi.',
+      );
+    });
+  }
+  async importStoryPlan(event: Event) {
+    const input = event.target as HTMLInputElement,
+      file = input.files?.[0];
+    if (!file) return;
+    try {
+      await this.perform(async () => {
+        if (file.size > 262144) throw new Error('File phân cảnh tối đa 256 KiB.');
+        const data = JSON.parse(await file.text());
+        const proposal = data.proposal ?? data.plan?.proposal;
+        if (data.format !== 'flowvideo.story-plan' || data.schemaVersion !== 1 || !proposal)
+          throw new Error('File phân cảnh không đúng định dạng.');
+        const result = await this.api('/projects/' + this.projectId() + '/story-plans/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            format: data.format,
+            schemaVersion: data.schemaVersion,
+            proposal,
+          }),
+        });
+        await this.refreshStoryPlans();
+        const original = await this.api(
+          '/projects/' + this.projectId() + '/story-plans/' + result.plan.id,
+        );
+        this.architect?.show(result.plan, original.original);
+        this.notice.set('Đã nhập bản phân cảnh để duyệt; chưa gọi AI hoặc thay storyboard.');
+      });
+    } finally {
+      input.value = '';
+    }
+  }
+  async openStoryPlan(id: string) {
+    await this.perform(async () => {
+      const data = await this.api('/projects/' + this.projectId() + '/story-plans/' + id);
+      this.architect?.show(data.plan, data.original);
+    });
+  }
+  async editStoryPlan(edit: StoryPlanEdit, apply: boolean) {
+    await this.perform(async () => {
+      const base = '/projects/' + this.projectId() + '/story-plans/' + edit.id;
+      const result = await this.api(base, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ revision: edit.revision, proposal: edit.proposal }),
+      });
+      this.architect?.accepted(result.plan);
+      await this.refreshStoryPlans();
+      if (apply) {
+        const version = await this.storeDocument();
+        const applied = await this.api(base + '/apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ revision: result.plan.revision, version }),
+        });
+        this.applyDraft(applied.document);
+        this.documentVersion.set(applied.version);
+        this.boardSession.update((v) => v + 1);
+        this.tab.set('board');
+        this.notice.set(
+          'Đã áp dụng bản phân cảnh đã duyệt. Chọn tư liệu hoặc dùng quy trình một nút để sản xuất.',
+        );
+      } else this.notice.set('Đã lưu bản sửa phân cảnh; bản AI gốc được giữ riêng.');
+    });
+  }
+  async cancelStoryPlan(id: string) {
+    await this.perform(async () => {
+      await this.api('/projects/' + this.projectId() + '/story-plans/' + id + '/cancel', {
+        method: 'POST',
+      });
+      await this.refreshStoryPlans();
+      this.notice.set('Đã hủy phân cảnh trước khi gửi AI.');
+    });
+  }
+  async refreshStoryHistory() {
+    await this.perform(() => this.refreshStoryPlans());
+  }
+  async inspectQuality(id: string) {
+    await this.perform(async () => {
+      const report = await this.api('/jobs/' + id + '/qa', { method: 'POST' });
+      this.qaReport.set(report);
+      this.notice.set(
+        report.result === 'Failed'
+          ? 'Bản xuất có lỗi QA kỹ thuật.'
+          : 'Đã kiểm tra thông số bản xuất.',
+      );
+    });
+  }
+  exportQuality() {
+    const report = this.qaReport();
+    if (report) this.downloadJson(report, 'flowvideo-qa-' + report.jobId + '.json');
   }
   async refreshProduction() {
     const id = this.projectId(),

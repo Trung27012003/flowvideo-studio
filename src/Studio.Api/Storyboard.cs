@@ -19,7 +19,8 @@ public record StoryScene(
     Guid? AssetId,
     double Duration = 5,
     double Start = 0,
-    SceneOptions? Options = null
+    SceneOptions? Options = null,
+    SceneDirection? Direction = null
 );
 
 public record StoryDocument(
@@ -250,6 +251,7 @@ public static class Storyboard
             doc.Scenes.Any(s =>
                 s is null
                 || (s.Options is not null && !s.Options.Valid())
+                || (s.Direction is not null && !s.Direction.Valid())
                 || s.Id == Guid.Empty
                 || s.Title is null
                 || s.Title.Length > 120
@@ -258,6 +260,7 @@ public static class Storyboard
                 || s.Narration.Contains('\0')
                 || s.Prompt is null
                 || s.Prompt.Length > 4000
+                || SceneDirection.VisualPrompt(s).Length > 4000
                 || !double.IsFinite(s.Duration)
                 || s.Duration < .1
                 || s.Duration > 600
