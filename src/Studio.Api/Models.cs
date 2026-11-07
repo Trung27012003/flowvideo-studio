@@ -47,7 +47,8 @@ public record RenderRequest(
     bool DuckMusic = false,
     RenderEffects? Effects = null,
     CaptionStyle? Captions = null,
-    AudioTuning? Audio = null
+    AudioTuning? Audio = null,
+    LoopOptions? Loop = null
 );
 
 public record SceneClip(
@@ -68,6 +69,7 @@ public class StudioDb(DbContextOptions<StudioDb> options) : DbContext(options)
 {
     public DbSet<AssetPreference> AssetPreferences => Set<AssetPreference>();
     public DbSet<SavedWorkspaceItem> SavedWorkspaceItems => Set<SavedWorkspaceItem>();
+    public DbSet<ProductionRun> ProductionRuns => Set<ProductionRun>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<Asset> Assets => Set<Asset>();
     public DbSet<RenderJob> Jobs => Set<RenderJob>();
@@ -81,6 +83,9 @@ public class StudioDb(DbContextOptions<StudioDb> options) : DbContext(options)
         b.Entity<VideoGeneration>().HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId);
         b.Entity<VideoGeneration>().HasIndex(x => new { x.ProjectId, x.CreatedAt });
         b.Entity<VideoGeneration>().HasIndex(x => new { x.Status, x.CreatedAt });
+        b.Entity<ProductionRun>().HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId);
+        b.Entity<ProductionRun>().HasIndex(x => new { x.ProjectId, x.CreatedAt });
+        b.Entity<ProductionRun>().HasIndex(x => new { x.Status, x.CreatedAt });
         b.Entity<AssetPreference>().HasKey(x => x.AssetId);
         b.Entity<AssetPreference>()
             .HasOne<Asset>()

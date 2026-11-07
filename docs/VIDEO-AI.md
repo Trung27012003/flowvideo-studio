@@ -40,7 +40,7 @@ Khi xong, chọn **Dùng video cho cảnh** để đổi tư liệu của bản 
 - Một worker video xử lý tuần tự. Queued còn lại tiếp tục khi mở lại ứng dụng. Running chuyển Unknown sau restart để tránh tính phí lặp.
 - HTTP 5xx, lỗi mạng/hết thời gian hoặc response chưa hoàn tất chuyển Unknown; lỗi từ chối/JSON/file sai chuyển Failed. Giữ interaction ID phía server nếu nhận được. Không có tự retry hay nút retry ngầm gửi lại.
 - Hủy chỉ tác dụng trước khi worker claim lượt; không hứa dừng hoặc hoàn tiền yêu cầu đã gửi.
-- Chưa có quản lý tương tác nhiều lượt, sửa/extend video, nhiều ảnh tham chiếu, tự tạo giọng từ narration rồi tự ráp tất cả ngay từ ý tưởng. Một nút batch hiện tạo tư liệu, chưa phải toàn bộ quy trình từ ý tưởng đến đăng bài.
+- Chưa có quản lý tương tác nhiều lượt, sửa/extend video hoặc nhiều ảnh tham chiếu. v0.13 đã bổ sung quy trình riêng tự tạo tư liệu/giọng và ráp từ storyboard/kịch bản, xem [Production](PRODUCTION.md); chưa tự phân cảnh AI từ ý tưởng hoặc đăng bài.
 
 ## Nguồn tham khảo chính thức
 

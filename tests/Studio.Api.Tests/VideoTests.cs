@@ -310,16 +310,11 @@ public sealed class VideoTests
     [Fact]
     public async Task StartupKeepsQueuedMarksRunningUnknownAndQueuedCanCancel()
     {
-        using var app = new AudioApp(false);
+        using var app = new AudioApp(false) { DisabledWorkers = [typeof(VideoWorker)] };
         using var c = app.CreateClient();
         var (project, scene) = await Setup(c);
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<StudioDb>();
-        await app
-            .Services.GetServices<IHostedService>()
-            .OfType<VideoWorker>()
-            .Single()
-            .StopAsync(CancellationToken.None);
         var running = new VideoGeneration
         {
             Id = Guid.NewGuid(),

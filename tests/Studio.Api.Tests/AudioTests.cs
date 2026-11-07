@@ -312,11 +312,14 @@ public sealed class AudioApp : WebApplicationFactory<Program>
         Path.Combine(Path.GetTempPath(), "flowvideo-audio-test-" + Guid.NewGuid().ToString("N"));
     public string Audio => Path.Combine(Data, "fixture.mp3");
     public string Video => Path.Combine(Data, "fixture.mp4");
+    public Type[] DisabledWorkers = [];
     public HttpMessageHandler? ImageHandler;
+    public HttpMessageHandler? AudioHandler;
     public int ImageLimit = 10;
     public HttpMessageHandler? VideoHandler;
     public bool VideoKey;
     public int VideoLimit = 5;
+    public int WorkflowSpeechLimit = 20;
     public int Calls;
     public string SpeechBody = "";
     public string TranscriptionBody = "";
@@ -374,13 +377,23 @@ public sealed class AudioApp : WebApplicationFactory<Program>
                         { "IMAGE_DAILY_LIMIT", ImageLimit.ToString() },
                         { "GEMINI_API_KEY", VideoKey ? "gemini-test-key" : "" },
                         { "VIDEO_DAILY_LIMIT", VideoLimit.ToString() },
+                        { "WORKFLOW_TTS_DAILY_LIMIT", WorkflowSpeechLimit.ToString() },
                     }
                 )
         );
         builder.ConfigureServices(s =>
         {
+            foreach (
+                var descriptor in s.Where(d =>
+                        d.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService)
+                        && d.ImplementationType is Type type
+                        && DisabledWorkers.Contains(type)
+                    )
+                    .ToArray()
+            )
+                s.Remove(descriptor);
             s.AddHttpClient("OpenAiAudio")
-                .ConfigurePrimaryHttpMessageHandler(() => new FakeAudio(this));
+                .ConfigurePrimaryHttpMessageHandler(() => AudioHandler ?? new FakeAudio(this));
             s.AddHttpClient("GeminiVideo")
                 .ConfigurePrimaryHttpMessageHandler(() => VideoHandler ?? new RejectImage());
             s.AddHttpClient("OpenAiImage")

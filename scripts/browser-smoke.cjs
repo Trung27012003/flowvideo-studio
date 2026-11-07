@@ -1769,6 +1769,13 @@ async function waitForJobs(page, project, predicate) {
           .value === id,
       sourceAsset.id,
     );
+    await page.waitForFunction(
+      (speed) =>
+        document.querySelector(
+          "app-storyboard .scene app-scene-options input[step='0.1']",
+        )?.value === speed,
+      speedBeforeReplace,
+    );
     await board
       .getByLabel("Tư liệu thay thế", { exact: true })
       .selectOption(replacementAsset.id);
@@ -2168,6 +2175,260 @@ async function waitForJobs(page, project, predicate) {
     });
     console.log(
       "PASS v0.12 browser: AI video controls, save-before-submit, reference, single/batch queue, explicit apply, real MP4 download, queued cancellation; mocked provider contract",
+    );
+
+    // Real workflow API and renderer: no AI mock is used for this offline workflow.
+    const productionProjectResponse = await page.request.post(
+      "http://127.0.0.1:5099/api/projects",
+      { data: { name: "One click workflow" } },
+    );
+    const productionProject = (await productionProjectResponse.json()).id;
+    const productionUpload = await page.request.post(
+      "http://127.0.0.1:5099/api/projects/" + productionProject + "/assets",
+      {
+        multipart: {
+          file: {
+            name: "flow-source.mp4",
+            mimeType: "video/mp4",
+            buffer: await fs.readFile(clip),
+          },
+        },
+      },
+    );
+    const productionAsset = await productionUpload.json();
+    const productionScene = require("node:crypto").randomUUID();
+    const productionDocument = {
+      script: "First scene\n\nSecond scene",
+      scenes: [
+        {
+          id: productionScene,
+          title: "Pipeline first",
+          narration: "Original pipeline narration",
+          prompt: "Teal room",
+          assetId: productionAsset.id,
+          duration: 0.5,
+          start: 0,
+        },
+        {
+          id: require("node:crypto").randomUUID(),
+          title: "Pipeline second",
+          narration: "Second pipeline narration",
+          prompt: "Blue room",
+          assetId: productionAsset.id,
+          duration: 0.6,
+          start: 0,
+        },
+      ],
+      ratio: "16:9",
+      resolution: 720,
+      autoCaptions: true,
+    };
+    const saveProduction = await page.request.put(
+      "http://127.0.0.1:5099/api/projects/" + productionProject + "/document",
+      { data: { version: 0, document: productionDocument } },
+    );
+    assert(saveProduction.ok());
+    await page.reload();
+    await page
+      .getByLabel("Chọn dự án", { exact: true })
+      .selectOption(productionProject);
+    await page.getByRole("button", { name: "Storyboard", exact: true }).click();
+    await board.getByLabel("Tên cảnh", { exact: true }).first().waitFor();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("app-storyboard input[aria-label='Tên cảnh']")
+          ?.value === "Pipeline first",
+    );
+    const productionPanel = page.locator("app-production-studio");
+    await productionPanel.locator("summary").first().click();
+    await productionPanel
+      .getByRole("button", { name: "Kiểm tra và đếm lượt AI", exact: true })
+      .click();
+    await productionPanel
+      .getByRole("status")
+      .filter({ hasText: "2 cảnh · tạo mới 0 ảnh, 0 video, 0 giọng" })
+      .waitFor();
+    assert.equal(
+      (
+        await (
+          await page.request.get(
+            "http://127.0.0.1:5099/api/projects/" +
+              productionProject +
+              "/workflows",
+          )
+        ).json()
+      ).items.length,
+      0,
+    );
+    const productionStart = page.waitForRequest(
+      (r) => r.method() === "POST" && r.url().endsWith("/workflows/start"),
+    );
+    await productionPanel
+      .getByRole("button", { name: "Tạo tư liệu, giọng và dựng", exact: true })
+      .click();
+    const productionPayload = (await productionStart).postDataJSON();
+    assert.equal(productionPayload.media, "existing");
+    assert.equal(productionPayload.speech, false);
+    assert(productionPayload.version > 1);
+    await page
+      .getByRole("status")
+      .filter({ hasText: "Đã chụp storyboard và bắt đầu quy trình" })
+      .waitFor();
+    await board
+      .getByLabel("Lời của cảnh", { exact: true })
+      .first()
+      .fill("Edited while pipeline runs");
+    let completedProduction;
+    for (let i = 0; i < 240; i++) {
+      const rows = (
+        await (
+          await page.request.get(
+            "http://127.0.0.1:5099/api/projects/" +
+              productionProject +
+              "/workflows",
+          )
+        ).json()
+      ).items;
+      completedProduction = rows.find(
+        (r) => r.id === productionPayload.requestId,
+      );
+      assert(
+        !["Failed", "Unknown"].includes(completedProduction.status),
+        JSON.stringify(completedProduction),
+      );
+      if (completedProduction.status === "Succeeded") break;
+      assert(i < 239, "Workflow completion timeout");
+      await delay(250);
+    }
+    await productionPanel.getByText("Hoàn tất", { exact: true }).waitFor();
+    assert.equal(
+      await board
+        .getByLabel("Lời của cảnh", { exact: true })
+        .first()
+        .inputValue(),
+      "Edited while pipeline runs",
+    );
+    let productionSnapshotDownload = page.waitForEvent("download");
+    await productionPanel
+      .getByRole("link", { name: "Tải bản chụp quy trình", exact: true })
+      .click();
+    const productionSnapshot = JSON.parse(
+      await fs.readFile(
+        await (await productionSnapshotDownload).path(),
+        "utf8",
+      ),
+    );
+    assert.equal(productionSnapshot.format, "flowvideo.production");
+    assert.equal(
+      productionSnapshot.result.scenes[0].narration,
+      "Original pipeline narration",
+    );
+    await productionPanel
+      .getByRole("button", { name: "Xem video quy trình", exact: true })
+      .click();
+    await page.locator("video").evaluate((v) => v.load());
+    await page.waitForFunction(() => {
+      const v = document.querySelector("video");
+      return v && v.duration > 1 && v.duration < 1.3;
+    });
+    await page.getByRole("button", { name: "Đóng ×", exact: true }).click();
+    await page.getByRole("button", { name: "Storyboard", exact: true }).click();
+    await productionPanel.locator("summary").first().click();
+    await productionPanel
+      .getByRole("button", { name: "Mở kết quả vào bản nháp", exact: true })
+      .click();
+    await page
+      .getByRole("status")
+      .filter({ hasText: "Đã mở kết quả quy trình vào bản nháp" })
+      .waitFor();
+    assert.equal(
+      await board
+        .getByLabel("Lời của cảnh", { exact: true })
+        .first()
+        .inputValue(),
+      "Original pipeline narration",
+    );
+    await productionPanel.locator("summary").first().click();
+    await board
+      .getByLabel("Thời lượng cảnh (s)", { exact: true })
+      .first()
+      .fill("60");
+    await productionPanel
+      .getByRole("button", { name: "Tạo tư liệu, giọng và dựng", exact: true })
+      .click();
+    await productionPanel
+      .getByRole("button", { name: "Hủy quy trình", exact: true })
+      .first()
+      .click();
+    await page
+      .getByRole("status")
+      .filter({ hasText: "Đã hủy quy trình" })
+      .waitFor();
+    await productionPanel.getByText("Đã hủy", { exact: true }).waitFor();
+    await page.screenshot({
+      path: path.join(root, "test-results/production.png"),
+      fullPage: true,
+    });
+    // Real loop exports from UI; color/frame behavior is checked in LoopTests.
+    await page.getByRole("button", { name: /Studio & render/ }).click();
+    await page.getByRole("button", { name: /flow-source.mp4/ }).click();
+    await page.getByLabel("Chế độ dựng").selectOption("loop");
+    await page.getByLabel("Giới hạn (giây)").fill("3");
+    await page
+      .getByLabel("Độ phân giải", { exact: true })
+      .selectOption({ label: "720p" });
+    for (const style of ["reverse", "pingpong", "crossfade"]) {
+      await page
+        .getByLabel("Kiểu lặp video", { exact: true })
+        .selectOption(style);
+      if (style === "crossfade")
+        await page
+          .getByLabel("Crossfade mối nối (s)", { exact: true })
+          .fill("0.4");
+      const previous = (
+        await (
+          await page.request.get(
+            "http://127.0.0.1:5099/api/projects/" + productionProject + "/jobs",
+          )
+        ).json()
+      ).map((j) => j.id);
+      const loopRequest = page.waitForRequest(
+        (r) => r.method() === "POST" && r.url().endsWith("/renders"),
+      );
+      await page
+        .getByRole("button", { name: "▷ Tạo & chạy video", exact: true })
+        .click();
+      const payload = (await loopRequest).postDataJSON();
+      assert.equal(payload.loop.style, style);
+      let newest;
+      for (let i = 0; i < 240; i++) {
+        const rows = await (
+          await page.request.get(
+            "http://127.0.0.1:5099/api/projects/" + productionProject + "/jobs",
+          )
+        ).json();
+        newest = rows.find((j) => !previous.includes(j.id));
+        if (newest) {
+          assert.notEqual(newest.status, "Failed", JSON.stringify(newest));
+          if (newest.status === "Succeeded") break;
+        }
+        assert(i < 239, "Loop completion timeout");
+        await delay(250);
+      }
+      const loopRecipe = await (
+        await page.request.get(
+          "http://127.0.0.1:5099/api/jobs/" + newest.id + "/recipe",
+        )
+      ).json();
+      assert.equal(loopRecipe.request.loop.style, style);
+    }
+    await page.screenshot({
+      path: path.join(root, "test-results/loop.png"),
+      fullPage: true,
+    });
+    await page.getByRole("button", { name: "Storyboard", exact: true }).click();
+    console.log(
+      "PASS v0.13 browser: real offline production plan/start/render/preview/snapshot/apply/cancel; draft isolation and real reverse/pingpong/crossfade UI exports",
     );
 
     await page.evaluate(() => scrollTo(0, 0));

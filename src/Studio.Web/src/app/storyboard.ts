@@ -153,11 +153,11 @@ export class StoryboardEditor {
   endEdit() {
     this.editing = false;
   }
-  private commit(update: (scenes: SceneDraft[]) => SceneDraft[]) {
+  private commit(update: (scenes: SceneDraft[]) => SceneDraft[], coalesce = false) {
     const previous = this.scenes(),
       next = update(previous);
     if (JSON.stringify(previous) === JSON.stringify(next)) return;
-    if (!this.editing || !this.editRecorded) {
+    if (!coalesce || !this.editing || !this.editRecorded) {
       this.undoStack.update((stack) => [...stack, structuredClone(previous)].slice(-20));
       this.editRecorded = true;
     }
@@ -166,6 +166,8 @@ export class StoryboardEditor {
     this.actionError.set('');
   }
   undo() {
+    this.endEdit();
+    this.editRecorded = false;
     const stack = this.undoStack();
     if (!stack.length) return;
     this.redoStack.update((s) => [...s, structuredClone(this.scenes())].slice(-20));
@@ -173,6 +175,8 @@ export class StoryboardEditor {
     this.undoStack.set(stack.slice(0, -1));
   }
   redo() {
+    this.endEdit();
+    this.editRecorded = false;
     const stack = this.redoStack();
     if (!stack.length) return;
     this.undoStack.update((s) => [...s, structuredClone(this.scenes())].slice(-20));
@@ -344,23 +348,25 @@ export class StoryboardEditor {
     } else this.resolution.set(720);
   }
   change(id: string, patch: Partial<SceneDraft>) {
-    this.commit((list) =>
-      list.map((s) =>
-        s.id === id
-          ? {
-              ...s,
-              ...patch,
-              ...('assetId' in patch
-                ? {
-                    start: 0,
-                    ...(!this.video(patch.assetId ?? null)
-                      ? { options: { ...defaultSceneOptions(), ...s.options, speed: 1 } }
-                      : {}),
-                  }
-                : {}),
-            }
-          : s,
-      ),
+    this.commit(
+      (list) =>
+        list.map((s) =>
+          s.id === id
+            ? {
+                ...s,
+                ...patch,
+                ...('assetId' in patch
+                  ? {
+                      start: 0,
+                      ...(!this.video(patch.assetId ?? null)
+                        ? { options: { ...defaultSceneOptions(), ...s.options, speed: 1 } }
+                        : {}),
+                    }
+                  : {}),
+              }
+            : s,
+        ),
+      !('assetId' in patch),
     );
   }
   move(index: number, delta: number) {

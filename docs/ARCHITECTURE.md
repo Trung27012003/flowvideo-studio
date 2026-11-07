@@ -115,3 +115,32 @@ Frontend SceneOptionsEditor dùng focusin/out để gom lịch sử chỉnh mộ
 `VideoGenerations` là bảng mới, có index project/created và status/created. `VideoFeatures` intake serialize quota/cache/idempotency; worker claim Queued bằng UPDATE có điều kiện. `VideoProvider` gọi Gemini Interactions qua HttpClient tên GeminiVideo, endpoint cố định, key trong header và không redirect theo URL từ response. `VideoWorker` đọc MP4 bounded, ffprobe validation rồi move file/store asset và trạng thái cùng một SaveChanges; thất bại dọn destination/temp, không persist asset còn tracked. Running lúc startup → Unknown, không lặp yêu cầu có thể đã tính phí.
 
 Frontend VideoStudio tách component; App lưu document trước enqueue, polling có project/request version guard, hiển thị lỗi partial batch. Kết quả không tự đổi bản nháp; apply rõ ràng rồi save/render. JSON/storyboard import không mang history provider sang project khác. Xem VIDEO-AI.md cho hợp đồng và kiểm chứng.
+
+## v0.13: production state machine và loop
+
+`ProductionRuns` lưu request, immutable StoryDocument snapshot, ProductionState (child generation IDs, per-scene speech status/asset/duration, voice/render IDs, result document và event journal). Index theo project/created và status/created. Không dùng state đang sửa trên Angular làm nguồn cho worker.
+
+```mermaid
+flowchart LR
+    A[Plan: scope/version/quota] --> B[Start: snapshot + child jobs + reservations]
+    B --> C[WaitingAssets]
+    C --> D[Speaking từng cảnh]
+    D --> E[Preparing: timing + silence + voice concat]
+    E --> F[Rendering: durable RenderJob]
+    F --> G[Succeeded: preview/download/apply]
+    C --> U[Failed hoặc Unknown]
+    D --> U
+    E --> U
+    F --> R[Failed: retry render local]
+    R --> F
+```
+
+Intake khóa ProductionGate → ImageIntake → VideoIntake, lập kế hoạch không mutate DB rồi SaveChanges một lần cho run/children. Image/video quota chung với endpoint riêng. GenerationKeys chia sẻ cách fingerprint với v0.12; script-derived scene IDs dùng SHA-256 của project/index/text, giữ cache khi script không đổi. Không dùng cache còn Queued/Running thuộc lượt khác.
+
+Worker tick các run active và khóa gate ngắn để cập nhật trạng thái. Không giữ gate qua HTTP TTS hoặc FFmpeg concat. Trước TTS phải persist Speaking/Running; restart chuyển Speaking thành Unknown. Sau HTTP gọi lại gate, đọc run mới nhất và không phục hồi run đã Canceled. Audio đã nhận có thể lưu library dù run bị hủy. Fail/Unknown/cancel hủy các child Queued do run sở hữu; không đụng media cache hay hứa hủy provider đang chạy.
+
+Giọng từng cảnh được lưu trước bước local kế tiếp. Preparing có thể dựng lại local sau crash: gán generation results vào bản chụp, reset start/speed cho tư liệu mới, auto-timing từ audio duration + padding hoặc trim/pad cố định, chèn silence ở cảnh không lời, concat 48 kHz stereo. Voice mới reset global VoiceSpeed/VoiceDelay/VoiceStart để giữ timeline. Asset giọng toàn phim + render job + trạng thái Rendering lưu cùng SaveChanges. Render lỗi có thể tạo job mới từ recipe cũ; không rerun AI. File output chưa commit được dọn trong finally.
+
+LoopOptions là trường optional của RenderRequest, không thêm vào StoryDocument mode concat. Normalize trước, tạo cycle file nếu reverse/pingpong/crossfade rồi stream-loop như trước. Reverse/pingpong ≤8 giây/720p; crossfade ≤30 giây; kiểm tra trước normalize để tránh buffer nguồn dài. Pingpong bỏ endpoint frames trùng. Crossfade trim head/body, reset PTS/timebase/fps và blend đuôi/đầu; cycle xấp xỉ L-fade. Render output duration độc lập với cycle duration.
+
+Lịch sử editor gom thay đổi khi gõ trong một ô; thao tác cấu trúc/batch luôn tạo entry riêng, undo/redo kết thúc nhóm focus. Điều này tránh bỏ qua entry thay media khi flag focus còn tồn tại do disabled/async UI.

@@ -175,6 +175,17 @@ public class RenderWorker(
                 var available =
                     (Math.Min(cut?.End ?? sourceDuration, sourceDuration) - start) / options.Speed;
                 var take = Math.Min(remaining, scene?.Duration ?? available);
+                var loopStyle = req.Loop?.Style ?? "direct";
+                if (
+                    req.Mode == "loop"
+                    && (
+                        (loopStyle is "reverse" or "pingpong") && take > 8.05
+                        || loopStyle == "crossfade" && take > 30.05
+                    )
+                )
+                    throw new IOException(
+                        "Chu kỳ quá dài cho kiểu loop đã chọn. Reverse/ping-pong tối đa 8 giây; crossfade tối đa 30 giây."
+                    );
                 var key = (
                     id,
                     start,
@@ -271,7 +282,16 @@ public class RenderWorker(
             }
             var final = new List<string> { "-y", "-nostdin", "-hide_banner", "-loglevel", "error" };
             if (req.Mode == "loop")
-                final.AddRange(["-stream_loop", "-1", "-i", parts[0]]);
+            {
+                var cycle = await (req.Loop ?? new LoopOptions()).Prepare(
+                    parts[0],
+                    temp,
+                    elapsed,
+                    effects,
+                    ct
+                );
+                final.AddRange(["-stream_loop", "-1", "-i", cycle]);
+            }
             else
             {
                 await File.WriteAllLinesAsync(

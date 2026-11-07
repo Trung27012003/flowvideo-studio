@@ -1,4 +1,4 @@
-# Kiểm chứng bản v0.12
+# Kiểm chứng bản v0.13
 
 Đã chạy trong môi trường Linux với .NET SDK 10.0.403, Node.js 24 và FFmpeg:
 
@@ -40,7 +40,7 @@ Phép đo trước/sau và giới hạn diễn giải xem tại [PERFORMANCE.md]
 - Startup đánh dấu Running Unknown, chỉ tiếp tục Queued. Kiểm tra thiếu key, phiên bản cũ, prompt rỗng và dọn file.
 - Browser dùng capability/image job API mô phỏng để kiểm tra queued/succeeded, chọn ảnh vào cảnh và dựng thật. Không có API key thật hoặc yêu cầu tính phí trong test.
 
-Tổng bộ integration tests hiện có 85 trường hợp. Chưa kiểm chứng chất lượng ảnh/quyền model/độ trễ thực tế bằng tài khoản OpenAI của người dùng.
+Tổng bộ integration tests hiện có 104 trường hợp. Chưa kiểm chứng chất lượng ảnh/quyền model/độ trễ thực tế bằng tài khoản OpenAI của người dùng.
 
 ## Đợt 10 chức năng
 
@@ -116,3 +116,15 @@ Không gọi AI trả phí. Tạo video AI vẫn chưa có trong đợt v0.10.
 Tổng .NET 85, Node 22. Các lệnh xác minh: `dotnet test tests/Studio.Api.Tests -c Release`, `npm run build --prefix src/Studio.Web`, `npm run test:tools --prefix src/Studio.Web`, `python3 scripts/smoke.py`, `node scripts/browser-smoke.cjs` (có Chromium và SDK trong PATH). CI chạy toàn bộ và đóng gói ứng dụng/ảnh chụp.
 
 Không có yêu cầu AI trả phí trong tests. Chưa kiểm tra Google/OpenAI bằng key thật: quyền model, hóa đơn, độ trễ và chất lượng tạo sinh còn cần tài khoản người dùng. Các phép đo DSP/codec/file chỉ chứng minh pipeline local và hợp đồng tích hợp. Xem [VIDEO-AI](VIDEO-AI.md) cho nguồn tham khảo chính thức.
+
+## v0.13: workflow sản xuất và loop
+
+Tổng **104 integration tests .NET**, **22 Node tests**, full FFmpeg smoke và Playwright browser.
+
+- 11 tests Production: plan không enqueue; offline snapshot/render thật; giữ bản đang sửa; request idempotency; per-scene TTS với blank scene/timing/padding; MP3 concat và SRT timeline; ảnh AI shared cache; chia script → video → render và reuse script-derived IDs; scope/options/version/key/quota nguyên batch; Unknown/no replay/restart; cancel queued children/capacity; fail media cancels unsent siblings; resume từ completed speech không gọi provider; hủy trong lúc TTS không làm run sống lại; retry render tạo job mới và không gọi lại AI.
+- 8 trường hợp Loop (2 Fact + 6 Theory): direct/reverse/pingpong/crossfade đo frame hai màu và blend/seam thực, duration và recipe; enum/mode/resolution/cycle/fade budgets; cleanup khi lỗi; cả 3 kiểu mới ở 24/60 fps giữ đúng frame rate. Đã bắt và sửa lỗi `xfade` nhận frame rate 1/0 sau trim/settb bằng bước fps cố định.
+- Browser dùng workflow API thật, không route mock workflow: plan/start, sửa narration khi đang chạy, snapshot nguyên vẹn, native video metadata/preview, apply result, cancel, reverse/pingpong/crossfade render từ UI. Đồng thời chạy lại toàn bộ flows v0.7–v0.12 và mobile/no JS errors.
+- Browser regression kiểm tra undo thay video → ảnh khôi phục media **và speed**; thao tác cấu trúc luôn có history entry riêng, input typing vẫn coalesce theo focus.
+- Các bài có AI dùng HTTP handler mô phỏng, trả PNG/MP3/MP4 thật để decode/probe/render. Không gọi dịch vụ AI tính phí. Quyền model, chất lượng tạo sinh và giá thực tế chưa được kiểm tra.
+
+Lệnh giữ như trước. Xem [Production](PRODUCTION.md), [Loops](LOOPS.md) cho cách dùng, giới hạn và các nguồn chính thức đã đối chiếu.

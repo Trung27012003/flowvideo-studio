@@ -68,7 +68,7 @@
         ></span
       >
       <div class="header-right">
-        <span class="pill">MVP v0.12</span
+        <span class="pill">MVP v0.13</span
         ><select
           aria-label="Chọn dự án"
           [ngModel]="projectId()"
@@ -184,6 +184,31 @@
                   <option value="loop">Lặp một ảnh / video</option>
                 </select></label
               >
+              @if (mode === 'loop') {
+                <label
+                  >Kiểu lặp video<select aria-label="Kiểu lặp video" [(ngModel)]="loopStyle">
+                    <option value="direct">Lặp trực tiếp</option>
+                    <option value="reverse">Đảo chiều rồi lặp</option>
+                    <option value="pingpong">Tiến lùi ping-pong</option>
+                    <option value="crossfade">Crossfade đầu/cuối</option>
+                  </select></label
+                >
+                @if (loopStyle === 'crossfade') {
+                  <label
+                    >Crossfade mối nối (s)<input
+                      type="number"
+                      min="0.05"
+                      max="2"
+                      step="0.05"
+                      [(ngModel)]="loopCrossfade"
+                  /></label>
+                }
+                <p class="hint">
+                  Reverse/ping-pong: chu kỳ nguồn tối đa 8 giây, 720p. Crossfade: tối đa 30 giây,
+                  chu kỳ dài hơn hai lần fade. Điểm vào/ra bên dưới giới hạn chu kỳ; giới hạn giây
+                  phía trên là độ dài bản xuất.
+                </p>
+              }
               <div class="two">
                 <label
                   >Tỉ lệ<select [(ngModel)]="ratio">
@@ -195,7 +220,7 @@
                 /></label>
               </div>
               <label
-                >Độ phân giải<select [(ngModel)]="resolution">
+                >Độ phân giải<select aria-label="Độ phân giải" [(ngModel)]="resolution">
                   <option [ngValue]="720">720p</option>
                   <option [ngValue]="1080">1080p</option>
                 </select></label
@@ -794,6 +819,21 @@
             </details>
           </section>
           @for (session of [boardSession()]; track session) {
+            <app-production-studio
+              [rows]="productionRuns()"
+              [projectId]="projectId()"
+              [estimate]="productionEstimate()"
+              [disabled]="busy() || !documentLoaded()"
+              [imageEnabled]="imageEnabled()"
+              [videoEnabled]="videoEnabled()"
+              [speechEnabled]="speechEnabled()"
+              [voices]="voices()"
+              (plan)="production($event, false)"
+              (start)="production($event, true)"
+              (action)="productionAction($event)"
+              (apply)="applyProduction($event)"
+              (preview)="previewProduction($event)"
+            />
             <app-video-studio
               [scenes]="scenes()"
               [assets]="assets()"
@@ -1198,23 +1238,26 @@
       }
       @if (tab() === 'roadmap') {
         <section class="panel roadmap">
-          <h2>Đã hoạt động trong v0.12</h2>
+          <h2>Đã hoạt động trong v0.13</h2>
           <p>
-            v0.12 thêm tạo video AI từ prompt/ảnh tham chiếu qua Gemini, tạo nhiều cảnh, xử lý
-            giọng/nhạc riêng, công cụ WAV/FLAC/MP4 tắt tiếng/GIF/poster/bảng ảnh/gói giao video và
-            kiểm tra thông số. Có viết hoa đầu câu, dấu câu, bỏ emoji, tìm/lấy đoạn/ghép SRT và xuất
-            CSV. Quản lý dự án và media, cắt điểm vào/ra từng clip, ghép ảnh/video, loop trực tiếp,
-            audio từ file, phụ đề SRT, hàng đợi lưu SQLite và tải MP4. Viết kịch bản, tạo giọng đọc
-            và nhận diện phụ đề AI khi có API key. Chỉnh sửa SRT không cần AI.
+            v0.13 thêm quy trình một nút từ storyboard/kịch bản đến tư liệu, giọng và bản dựng; loop
+            reverse/ping-pong/crossfade. Có tạo video AI từ prompt/ảnh tham chiếu qua Gemini, tạo
+            nhiều cảnh, xử lý giọng/nhạc riêng, công cụ WAV/FLAC/MP4 tắt tiếng/GIF/poster/bảng
+            ảnh/gói giao video và kiểm tra thông số. Có viết hoa đầu câu, dấu câu, bỏ emoji, tìm/lấy
+            đoạn/ghép SRT và xuất CSV. Quản lý dự án và media, cắt điểm vào/ra từng clip, ghép
+            ảnh/video, loop trực tiếp, audio từ file, phụ đề SRT, hàng đợi lưu SQLite và tải MP4.
+            Viết kịch bản, tạo giọng đọc và nhận diện phụ đề AI khi có API key. Chỉnh sửa SRT không
+            cần AI.
           </p>
           <h2>Giai đoạn tiếp theo</h2>
-          <p>1. Tự động tạo ảnh và giọng cho toàn storyboard.</p>
+          <p>1. Phân cảnh AI có cấu trúc từ ý tưởng và alignment từng từ.</p>
           <p>2. Sửa/extend video AI, nhiều ảnh tham chiếu và theo dõi chi phí.</p>
           <p>3. Timeline nhiều track và preview proxy (đã có tách đôi cảnh).</p>
-          <p>4. Loop crossfade/ping-pong và kiểm tra mối nối.</p>
+          <p>4. Preview mối nối và gợi ý điểm loop tự động.</p>
           <p>5. Cắt video theo transcript và xuất nhiều phiên bản.</p>
           <p class="hint">
-            Loop liền mạch, editor timeline nhiều track và đăng mạng xã hội chưa có trong bản này.
+            Editor timeline nhiều track, phân cảnh AI có cấu trúc và đăng mạng xã hội chưa có trong
+            bản này.
           </p>
         </section>
       }

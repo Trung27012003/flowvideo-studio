@@ -1,3 +1,4 @@
+import { ProductionStudio, ProductionOptions, ProductionView } from './production-studio';
 import { VideoStudio, VideoRow, VideoRequestOptions } from './video-studio';
 import { AudioOptions, defaultAudioTuning } from './audio-options';
 import { CaptionOptions, defaultCaptionStyle } from './caption-options';
@@ -53,6 +54,7 @@ interface Job {
     CaptionOptions,
     AudioOptions,
     VideoStudio,
+    ProductionStudio,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
@@ -72,6 +74,10 @@ export class App implements OnInit, OnDestroy {
   subtitles = computed(() => this.assets().filter((a) => a.kind === 'subtitle'));
   media = computed(() => this.assets().filter((a) => a.kind === 'video' || a.kind === 'image'));
   aiEnabled = signal(false);
+  productionRuns = signal<ProductionView[]>([]);
+  productionEstimate = signal<any>(null);
+  private productionRequestVersion = 0;
+  private productionSignature = '';
   videoEnabled = signal(false);
   videoJobs = signal<VideoRow[]>([]);
   videoUsed = signal(0);
@@ -233,6 +239,8 @@ export class App implements OnInit, OnDestroy {
   @ViewChild('mediaDialog', { static: true }) mediaDialog!: ElementRef<HTMLDialogElement>;
   projectName = '';
   mode = 'concat';
+  loopStyle = 'direct';
+  loopCrossfade = 0.3;
   duration = 30;
   ratio = '9:16';
   voiceId = '';
@@ -286,6 +294,9 @@ export class App implements OnInit, OnDestroy {
     clearTimeout(this.timer);
     if (this.destroyed) return;
     const active =
+      this.productionRuns().some((r) =>
+        ['WaitingAssets', 'Speaking', 'Preparing', 'Rendering'].includes(r.status),
+      ) ||
       this.videoJobs().some((r) => ['Queued', 'Running'].includes(r.generation.status)) ||
       this.jobs().some((j) => j.status === 'Queued' || j.status === 'Running') ||
       this.imageJobs().some(
@@ -295,7 +306,12 @@ export class App implements OnInit, OnDestroy {
     this.timer = setTimeout(async () => {
       if (!document.hidden && this.projectId()) {
         try {
-          await Promise.all([this.refreshJobs(), this.refreshImages(), this.refreshVideos()]);
+          await Promise.all([
+            this.refreshJobs(),
+            this.refreshImages(),
+            this.refreshVideos(),
+            this.refreshProduction(),
+          ]);
           this.syncError.set(false);
         } catch {
           if (!this.destroyed) this.syncError.set(true);
@@ -402,6 +418,9 @@ export class App implements OnInit, OnDestroy {
     this.jobs.set([]);
     this.imageJobs.set([]);
     this.videoJobs.set([]);
+    this.productionRuns.set([]);
+    this.productionEstimate.set(null);
+    this.productionSignature = '';
     this.videoUsed.set(0);
     this.imageUsed.set(0);
     this.selected.set([]);
@@ -422,6 +441,7 @@ export class App implements OnInit, OnDestroy {
       this.refreshJobs(),
       this.refreshImages(),
       this.refreshVideos(),
+      this.refreshProduction(),
       this.refreshSavedItems(),
       this.refreshPreferences(),
       this.api('/projects/' + id + '/document').then((result) => {
@@ -446,6 +466,77 @@ export class App implements OnInit, OnDestroy {
     const jobs = await this.api('/projects/' + id + '/jobs');
     if (id === this.projectId() && version === this.requestVersion && !this.destroyed)
       this.jobs.set(jobs);
+  }
+  async refreshProduction() {
+    const id = this.projectId(),
+      version = ++this.productionRequestVersion;
+    const result = await this.api('/projects/' + id + '/workflows');
+    if (id !== this.projectId() || version !== this.productionRequestVersion || this.destroyed)
+      return;
+    this.productionRuns.set(result.items);
+    const signature = result.items.map((r: any) => r.id + r.updatedAt).join('|');
+    if (signature !== this.productionSignature) {
+      const assets = await this.api('/projects/' + id + '/assets');
+      if (id !== this.projectId() || version !== this.productionRequestVersion || this.destroyed)
+        return;
+      this.assets.set(assets);
+      this.productionSignature = signature;
+    }
+  }
+  async production(options: ProductionOptions, start: boolean) {
+    await this.perform(async () => {
+      const version = await this.storeDocument();
+      const result = await this.api(
+        '/projects/' + this.projectId() + '/workflows/' + (start ? 'start' : 'plan'),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...options, requestId: crypto.randomUUID(), version }),
+        },
+      );
+      if (start) {
+        this.productionEstimate.set(null);
+        await this.refreshProduction();
+        this.schedulePoll();
+        this.notice.set(
+          'Đã chụp storyboard và bắt đầu quy trình. Bạn có thể tiếp tục chỉnh bản nháp.',
+        );
+      } else {
+        this.productionEstimate.set(result);
+        this.notice.set('Đã kiểm tra số lượt và hạn mức. Chưa gửi yêu cầu AI.');
+      }
+    });
+  }
+  async productionAction(value: { id: string; action: string }) {
+    await this.perform(async () => {
+      await this.api(
+        '/projects/' + this.projectId() + '/workflows/' + value.id + '/' + value.action,
+        { method: 'POST' },
+      );
+      await Promise.all([this.refreshProduction(), this.refreshJobs()]);
+      this.schedulePoll();
+      this.notice.set(
+        value.action === 'cancel'
+          ? 'Đã hủy quy trình. AI đã gửi có thể vẫn hoàn tất và tính phí.'
+          : 'Đã xếp hàng dựng lại, không gọi thêm AI.',
+      );
+    });
+  }
+  async applyProduction(id: string) {
+    await this.perform(async () => {
+      const data = await this.api(
+        '/projects/' + this.projectId() + '/workflows/' + id + '/snapshot',
+      );
+      if (!data.result) throw new Error('Quy trình chưa có kết quả storyboard.');
+      this.applyDraft(data.result);
+      this.boardSession.update((v) => v + 1);
+      this.productionEstimate.set(null);
+      this.notice.set('Đã mở kết quả quy trình vào bản nháp. Bấm Lưu storyboard để giữ.');
+    });
+  }
+  previewProduction(id: string) {
+    this.preview.set('/api/jobs/' + id + '/download');
+    this.tab.set('studio');
   }
   async refreshVideos() {
     const id = this.projectId(),
@@ -597,6 +688,8 @@ export class App implements OnInit, OnDestroy {
             .filter((id) => this.isVideo(id) && this.cuts()[id])
             .map((id) => ({ assetId: id, ...this.cuts()[id] })),
           mode: this.mode,
+          loop:
+            this.mode === 'loop' ? { style: this.loopStyle, crossfade: this.loopCrossfade } : null,
           duration: this.duration,
           ratio: this.ratio,
           fit: this.fit,

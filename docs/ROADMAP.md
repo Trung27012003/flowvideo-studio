@@ -141,5 +141,15 @@ Thời gian là dự trù cho một dev làm tập trung, cần điều chỉnh 
 - [x] Lịch sử bền vững, Unknown không retry, kiểm tra MP4, lưu library, preview/download/apply rõ ràng.
 - [x] Contract tests mô phỏng và render/browser thật; nguồn tham khảo và giới hạn: [VIDEO-AI](VIDEO-AI.md).
 - [ ] Kiểm tra tài khoản/model/chất lượng/giá bằng API key thật của người dùng.
-- [ ] Durable workflow từ ý tưởng → toàn bộ tư liệu + giọng → dựng mà không cần apply từng kết quả.
-- [ ] Loop ping-pong/crossfade; timeline nhiều track; nhiều ảnh tham chiếu và video editing/extension.
+- [x] Durable workflow từ storyboard/kịch bản → tư liệu + giọng → dựng đã có ở v0.13.
+- [ ] Ý tưởng → AI phân cảnh có cấu trúc → toàn bộ video.
+- [x] Loop reverse/ping-pong/crossfade đã có ở v0.13.
+- [ ] Timeline nhiều track; nhiều ảnh tham chiếu và video editing/extension.
+
+## V0.13 — sản xuất tự động và loop đã có
+
+- [x] Plan/check toàn batch, snapshot isolation, script-paragraph scenes, missing-media generation, shared cache/quota.
+- [x] Per-scene TTS, voice timing/padding/blank scenes, assembled voice, auto render, progress/events/history.
+- [x] Idempotency, cancel owned queued jobs, Unknown không replay AI, local resume, retry render, snapshot/apply.
+- [x] Reverse/ping-pong/crossfade với bounds và kiểm chứng frame thật.
+- [x] [Production workflow](PRODUCTION.md), [Loops](LOOPS.md), integration/browser kiểm chứng.

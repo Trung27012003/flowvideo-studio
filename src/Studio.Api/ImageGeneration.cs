@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
@@ -160,21 +158,12 @@ public static class ImageFeatures
                         );
                     var model = config["OPENAI_IMAGE_MODEL"] ?? "gpt-image-1";
                     var size = doc.Ratio == "16:9" ? "1536x1024" : "1024x1536";
-                    var fingerprint = Convert.ToHexString(
-                        SHA256.HashData(
-                            Encoding.UTF8.GetBytes(
-                                JsonSerializer.Serialize(
-                                    new
-                                    {
-                                        sceneId = req.SceneId,
-                                        prompt = scene.Prompt.Trim(),
-                                        model,
-                                        size,
-                                        quality = "low",
-                                    }
-                                )
-                            )
-                        )
+                    var fingerprint = GenerationKeys.Image(
+                        req.SceneId,
+                        scene.Prompt.Trim(),
+                        model,
+                        size,
+                        "low"
                     );
                     var cached = await db
                         .ImageGenerations.AsNoTracking()

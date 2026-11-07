@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
@@ -197,23 +195,14 @@ public static class VideoFeatures
                             );
                     }
                     var size = doc.Ratio;
-                    var fingerprint = Convert.ToHexString(
-                        SHA256.HashData(
-                            Encoding.UTF8.GetBytes(
-                                JsonSerializer.Serialize(
-                                    new
-                                    {
-                                        sceneId = req.SceneId,
-                                        prompt = scene.Prompt.Trim(),
-                                        model,
-                                        size,
-                                        quality = req.Resolution,
-                                        seconds = req.Seconds,
-                                        referenceId = req.ReferenceId,
-                                    }
-                                )
-                            )
-                        )
+                    var fingerprint = GenerationKeys.Video(
+                        req.SceneId,
+                        scene.Prompt.Trim(),
+                        model,
+                        size,
+                        req.Resolution,
+                        req.Seconds,
+                        req.ReferenceId
                     );
                     var cached = await db
                         .VideoGenerations.AsNoTracking()

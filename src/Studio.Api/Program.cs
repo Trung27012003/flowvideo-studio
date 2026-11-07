@@ -28,6 +28,8 @@ builder
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddScoped<VideoProvider>();
 builder.Services.AddHostedService<VideoWorker>();
+builder.Services.AddSingleton<ProductionGate>();
+builder.Services.AddHostedService<ProductionWorker>();
 var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
@@ -36,6 +38,7 @@ using (var scope = app.Services.CreateScope())
     await Storyboard.Upgrade(db);
     await ImageFeatures.Upgrade(db);
     await VideoFeatures.Upgrade(db);
+    await ProductionWorkflow.Upgrade(db);
     await WorkspaceWorkflow.Upgrade(db);
     await LibraryTools.Upgrade(db);
     await db
@@ -47,7 +50,7 @@ using (var scope = app.Services.CreateScope())
 }
 app.UseDefaultFiles();
 app.UseStaticFiles();
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.12.0" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.13.0" }));
 app.MapGet(
     "/api/capabilities",
     (IConfiguration c) =>
@@ -194,7 +197,8 @@ app.MapPost(
         if (!await db.Projects.AnyAsync(x => x.Id == id))
             return Results.NotFound();
         if (
-            (req.Audio is not null && !req.Audio.Valid())
+            (req.Loop is not null && !req.Loop.Valid(req.Mode, req.Resolution))
+            || (req.Audio is not null && !req.Audio.Valid())
             || (req.Captions is not null && !req.Captions.Valid())
             || (req.Effects is not null && !req.Effects.Valid())
             || req.Fit is not ("contain" or "cover")
@@ -442,6 +446,7 @@ app.MapAudio();
 app.MapStoryboard();
 app.MapImages();
 app.MapVideos();
+app.MapProduction();
 app.MapProjectTools();
 app.MapWorkspaceTools();
 app.MapMediaTools();
