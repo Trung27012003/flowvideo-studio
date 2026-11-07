@@ -297,6 +297,11 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
         document.querySelector("app-storyboard .settings select").value ===
         "9:16",
     );
+    await page
+      .getByLabel("Độ phân giải storyboard")
+      .locator("option:checked")
+      .filter({ hasText: "1080p" })
+      .waitFor({ state: "attached" });
     assert.equal(
       await page
         .getByLabel("Độ phân giải storyboard")
@@ -354,6 +359,11 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       .click();
     await page.waitForFunction(
       () => document.querySelectorAll("app-storyboard .scene").length === 3,
+    );
+    await page.waitForFunction(() =>
+      Array.from(document.querySelectorAll("app-storyboard .scene input")).some(
+        (input) => input.value?.includes("bản sao"),
+      ),
     );
     assert(
       (
@@ -618,6 +628,11 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       .getByRole("status")
       .filter({ hasText: "Đã nhập thành dự án mới" })
       .waitFor();
+    await page.waitForFunction(
+      (old) =>
+        document.querySelector('select[aria-label="Chọn dự án"]').value !== old,
+      originalProject,
+    );
     const importedProject = await page
       .getByRole("combobox", { name: "Chọn dự án", exact: true })
       .inputValue();
