@@ -29,6 +29,7 @@ using (var scope = app.Services.CreateScope())
     await db.Database.EnsureCreatedAsync();
     await Storyboard.Upgrade(db);
     await ImageFeatures.Upgrade(db);
+    await WorkspaceWorkflow.Upgrade(db);
     await db
         .Jobs.Where(x => x.Status == "Running")
         .ExecuteUpdateAsync(s =>
@@ -38,7 +39,7 @@ using (var scope = app.Services.CreateScope())
 }
 app.UseDefaultFiles();
 app.UseStaticFiles();
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.8.0" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.9.0" }));
 app.MapGet(
     "/api/capabilities",
     (IConfiguration c) =>
@@ -431,6 +432,7 @@ app.MapImages();
 app.MapProjectTools();
 app.MapWorkspaceTools();
 app.MapMediaTools();
+app.MapWorkspaceWorkflow();
 app.Map("/api/{**path}", () => Results.NotFound());
 app.MapFallbackToFile("index.html");
 static bool HasAudio(string json)

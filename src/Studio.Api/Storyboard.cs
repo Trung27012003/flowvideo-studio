@@ -148,30 +148,7 @@ public static class Storyboard
                 var error = await Validate(id, document, db, true, ct);
                 if (error is not null)
                     return Results.BadRequest(new { error });
-                var clips = document
-                    .Scenes!.Select(s => new SceneClip(
-                        s.AssetId!.Value,
-                        s.Duration,
-                        s.Start,
-                        s.Narration
-                    ))
-                    .ToArray();
-                var render = new RenderRequest(
-                    clips.Select(c => c.AssetId).ToArray(),
-                    Duration: (int)Math.Ceiling(clips.Sum(s => s.Duration)),
-                    VoiceId: document.VoiceId,
-                    MusicId: document.MusicId,
-                    Ratio: document.Ratio,
-                    Scenes: clips,
-                    AutoCaptions: document.AutoCaptions,
-                    Resolution: document.Resolution,
-                    VoiceGain: document.VoiceGain,
-                    MusicGain: document.MusicGain,
-                    Fit: document.Fit,
-                    FadeSeconds: document.FadeSeconds,
-                    DuckMusic: document.DuckMusic,
-                    Effects: document.Effects
-                );
+                var render = CreateRequest(document);
                 var job = new RenderJob
                 {
                     ProjectId = id,
@@ -189,6 +166,29 @@ public static class Storyboard
                     }
                 );
             }
+        );
+    }
+
+    internal static RenderRequest CreateRequest(StoryDocument document)
+    {
+        var clips = document
+            .Scenes!.Select(s => new SceneClip(s.AssetId!.Value, s.Duration, s.Start, s.Narration))
+            .ToArray();
+        return new RenderRequest(
+            clips.Select(c => c.AssetId).ToArray(),
+            Duration: (int)Math.Ceiling(clips.Sum(s => s.Duration)),
+            VoiceId: document.VoiceId,
+            MusicId: document.MusicId,
+            Ratio: document.Ratio,
+            Scenes: clips,
+            AutoCaptions: document.AutoCaptions,
+            Resolution: document.Resolution,
+            VoiceGain: document.VoiceGain,
+            MusicGain: document.MusicGain,
+            Fit: document.Fit,
+            FadeSeconds: document.FadeSeconds,
+            DuckMusic: document.DuckMusic,
+            Effects: document.Effects
         );
     }
 

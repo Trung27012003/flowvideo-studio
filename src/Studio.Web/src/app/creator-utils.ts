@@ -43,7 +43,7 @@ export function stamp(ms: number, vtt = false): string {
     String(ms % 1000).padStart(3, '0')
   );
 }
-export function parseSrt(content: string): Cue[] {
+export function parseSrt(content: string, ordered = true): Cue[] {
   if (content.length > 100000) throw new Error('SRT tối đa 100.000 ký tự.');
   const blocks = content
     .replace(/^\uFEFF/, '')
@@ -62,7 +62,7 @@ export function parseSrt(content: string): Cue[] {
     const start = time(match[1]),
       end = time(match[2]),
       text = lines.join('\n').trim();
-    if (start < previous || end <= start || !text || text.length > 2000)
+    if ((ordered && start < previous) || end <= start || !text || text.length > 2000)
       throw new Error('Kiểm tra thứ tự, thời lượng và nội dung SRT.');
     previous = start;
     return { start, end, text };
@@ -82,7 +82,7 @@ export function transformSrt(
   find = '',
   replacement = '',
 ): string {
-  let cues = parseSrt(content);
+  let cues = parseSrt(content, action !== 'sort');
   if (action === 'offset') {
     if (!Number.isFinite(amount) || Math.abs(amount) > 3600)
       throw new Error('Độ lệch từ -3.600 đến 3.600 giây.');
@@ -194,6 +194,53 @@ export function transformSrt(
         text,
       }));
     });
+  } else if (action === 'sort') {
+    cues = cues
+      .map((cue, index) => ({ ...cue, index }))
+      .sort((a, b) => a.start - b.start || a.index - b.index)
+      .map(({ index, ...cue }) => cue);
+  } else if (action === 'overlaps') {
+    let previousEnd = 0;
+    cues = cues.map((c) => {
+      const start = Math.max(c.start, previousEnd),
+        end = Math.max(c.end, start + 1);
+      previousEnd = end;
+      return { ...c, start, end };
+    });
+  } else if (action === 'minimum') {
+    if (!Number.isFinite(amount) || amount < 0.1 || amount > 10)
+      throw new Error('Thời lượng tối thiểu từ 0,1–10 giây.');
+    let previousEnd = 0;
+    cues = cues.map((c) => {
+      const start = Math.max(c.start, previousEnd),
+        end = Math.max(c.end, start + Math.round(amount * 1000));
+      previousEnd = end;
+      return { ...c, start, end };
+    });
+  } else if (action === 'whitespace') {
+    cues = cues.map((c) => ({
+      ...c,
+      text: c.text
+        .normalize('NFC')
+        .split('\n')
+        .map((line) => line.trim().replace(/[ \t]+/g, ' '))
+        .filter(Boolean)
+        .join('\n'),
+    }));
+  } else if (action === 'upper' || action === 'lower') {
+    cues = cues.map((c) => ({
+      ...c,
+      text: c.text
+        .split(/(<[^>]*>|\{\\[^}]*\})/g)
+        .map((token) =>
+          /^(<[^>]*>|\{\\[^}]*\})$/.test(token)
+            ? token
+            : action === 'upper'
+              ? token.toLocaleUpperCase('vi')
+              : token.toLocaleLowerCase('vi'),
+        )
+        .join(''),
+    }));
   } else throw new Error('Thao tác không hỗ trợ.');
   return writeSrt(cues);
 }
@@ -238,4 +285,56 @@ export function subtitleAnalysis(content: string): string {
       fast.push(i + 1);
   }
   return `${cues.length} câu · kết thúc ${(maxEnd / 1000).toFixed(3)} giây\n${overlaps} câu chồng lấn · ${fast.length} câu vượt 20 ký tự/giây\n${fast.length ? 'Cần xem lại câu: ' + fast.slice(0, 20).join(', ') + (fast.length > 20 ? '…' : '') : 'Không phát hiện câu đọc nhanh theo ngưỡng 20 ký tự/giây.'}\nƯớc lượng theo ký tự không tính khoảng trắng; không đo tốc độ giọng thực tế.`;
+}
+
+export function readingDurations(texts: string[], wpm: number): number[] {
+  if (!Number.isFinite(wpm) || wpm < 60 || wpm > 300)
+    throw new Error('Tốc độ đọc từ 60–300 từ/phút.');
+  const result = texts.map(
+    (text) =>
+      Math.max(1, Math.round((text.trim().split(/\s+/u).filter(Boolean).length / wpm) * 600)) / 10,
+  );
+  if (result.reduce((a, b) => a + b, 0) > 600)
+    throw new Error('Thời lượng ước tính vượt 600 giây.');
+  return result;
+}
+export function shuffled<T>(items: T[], random: () => number = Math.random): T[] {
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i--) {
+    const value = random();
+    if (!Number.isFinite(value) || value < 0 || value >= 1)
+      throw new Error('Nguồn ngẫu nhiên không hợp lệ.');
+    const j = Math.floor(value * (i + 1));
+    if (j < 0 || j > i) throw new Error('Nguồn ngẫu nhiên không hợp lệ.');
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+export function compareDocuments(saved: any, draft: any): string {
+  const oldScenes = new Map<string, any>((saved.scenes || []).map((s: any) => [s.id, s]));
+  const currentScenes = new Map<string, any>((draft.scenes || []).map((s: any) => [s.id, s]));
+  const added = [...currentScenes.keys()].filter((id) => !oldScenes.has(id)).length,
+    removed = [...oldScenes.keys()].filter((id) => !currentScenes.has(id)).length;
+  const changed = [...currentScenes.keys()].filter(
+    (id) =>
+      oldScenes.has(id) &&
+      JSON.stringify(oldScenes.get(id)) !== JSON.stringify(currentScenes.get(id)),
+  ).length;
+  const order = JSON.stringify([...oldScenes.keys()]) !== JSON.stringify([...currentScenes.keys()]);
+  const settings = [
+    'idea',
+    'script',
+    'ratio',
+    'voiceId',
+    'musicId',
+    'autoCaptions',
+    'resolution',
+    'voiceGain',
+    'musicGain',
+    'fit',
+    'fadeSeconds',
+    'duckMusic',
+    'effects',
+  ].filter((key) => JSON.stringify(saved[key] ?? null) !== JSON.stringify(draft[key] ?? null));
+  return `So với mốc: thêm ${added} cảnh, bỏ ${removed} cảnh, sửa ${changed} cảnh.\nThứ tự/danh sách: ${order ? 'khác' : 'giữ nguyên'}.\nTrường khác: ${settings.length ? settings.join(', ') : 'không có'}.`;
 }

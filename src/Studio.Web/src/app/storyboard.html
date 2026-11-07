@@ -9,6 +9,42 @@
     <span class="hint">Nhớ lưu sau khi chỉnh sửa.</span>
   </div>
   <fieldset [disabled]="disabled() || working()">
+    <details class="batch-tools">
+      <summary>Chọn nhiều cảnh & thời lượng theo lời</summary>
+      <div class="actions">
+        <button (click)="selectAllScenes()">Chọn tất cả cảnh</button
+        ><button (click)="selection.set([])">Bỏ chọn cảnh</button
+        ><span>{{ selectedScenes().length }} cảnh được chọn</span>
+      </div>
+      <div class="actions">
+        <button (click)="selectionAction('duplicate')" [disabled]="!selectedScenes().length">
+          Nhân bản cảnh đã chọn
+        </button>
+        <button (click)="selectionAction('remove')" [disabled]="!selectedScenes().length">
+          Xóa cảnh đã chọn
+        </button>
+        <button (click)="selectionAction('first')" [disabled]="!selectedScenes().length">
+          Đưa nhóm về đầu</button
+        ><button (click)="selectionAction('last')" [disabled]="!selectedScenes().length">
+          Đưa nhóm về cuối
+        </button>
+        <button (click)="selectionAction('export')" [disabled]="!selectedScenes().length">
+          Xuất JSON cảnh đã chọn
+        </button>
+        <button (click)="shuffle()">Trộn thứ tự cảnh</button>
+      </div>
+      <label
+        >Tốc độ đọc để căn cảnh (từ/phút)<input
+          type="number"
+          min="60"
+          max="300"
+          [(ngModel)]="readingSpeed" /></label
+      ><button (click)="readingTiming()">Căn thời lượng theo lời</button>
+      <p class="hint">
+        Ước tính theo từ cách nhau bởi khoảng trắng, tối thiểu 0,1 giây/cảnh. Có thể hoàn tác; không
+        gọi TTS. Xóa cảnh không xóa file thư viện.
+      </p>
+    </details>
     <details class="batch-tools" open>
       <summary>Công cụ storyboard hàng loạt</summary>
       <p>
@@ -162,7 +198,15 @@
       @for (scene of scenes(); track scene.id; let i = $index) {
         <article class="scene">
           <div class="scene-head">
-            <b>{{ i + 1 }} / {{ scenes().length }}</b>
+            <b>{{ i + 1 }} / {{ scenes().length }}</b
+            ><label class="checkbox"
+              ><input
+                type="checkbox"
+                [checked]="selection().includes(scene.id)"
+                (change)="selectScene(scene.id)"
+                [attr.aria-label]="'Chọn cảnh ' + (i + 1)"
+              />Chọn</label
+            >
             <button (click)="edge(i, false)" [disabled]="i === 0" aria-label="Đưa cảnh về đầu">
               Về đầu
             </button>
@@ -307,7 +351,13 @@
         (click)="render.emit()"
         [disabled]="disabled() || !scenes().length || total() > 600"
       >
-        Lưu & dựng storyboard
+        Lưu & dựng storyboard</button
+      ><button
+        class="secondary"
+        (click)="renderVariants.emit()"
+        [disabled]="disabled() || !scenes().length || total() > 600"
+      >
+        Dựng cả dọc và ngang
       </button>
     </div>
     <section class="image-history">

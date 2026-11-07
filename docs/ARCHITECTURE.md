@@ -1,4 +1,4 @@
-# Kiến trúc v0.8
+# Kiến trúc v0.9
 
 Angular → HTTP API ASP.NET Core → EF Core SQLite; BackgroundService đọc job queued và gọi FFmpeg. Browser polling theo tải: 2,5 giây khi active, 15 giây khi idle, 30 giây khi lỗi; không gửi khi tab ẩn. Mỗi vòng đợi request hoàn tất trước khi hẹn lần sau; version guard tránh phản hồi cũ ghi đè dự án mới. File dùng ID sinh bởi server, không dùng tên upload làm đường dẫn. FFmpeg arguments được truyền bằng ArgumentList, không qua shell.
 
@@ -83,3 +83,16 @@ MediaTools chạy công cụ đồng bộ theo request, semaphore hai tác vụ/
 GET recipe xuất DTO request snapshot và ID/trạng thái, không trả đường dẫn file vật lý. Jobs thêm hasAudio từ VoiceId/MusicId của request; frontend chỉ hiện link MP3 cho job hoàn tất có flag. Job filter/sort dùng computed signals của danh sách 100 job, không ảnh hưởng FIFO/polling.
 
 RenderOptions là Angular component dùng lại giữa Studio/Storyboard, model Effects và defaults chung. Creator-utils thêm các phép biến đổi SRT thuần, kiểm tra toàn kết quả trước cập nhật draft, xuất TXT và báo cáo CPS/chồng lấn. Mọi media derivative và export được kiểm tra bằng FFmpeg thật, upstream AI trong bộ cũ vẫn dùng fake provider.
+
+
+## Workspace workflow v0.9
+
+SavedWorkspaceItems lưu Id, ProjectId, Kind (checkpoint/preset), Name, ContentJson và CreatedAt, có FK project và index ProjectId/Kind. Upgrade CREATE TABLE/INDEX IF NOT EXISTS tương thích DB cũ. Capture đọc document đúng version, giới hạn 20 mục mỗi kind qua semaphore một backend; checkpoint giữ JSON bất biến, preset xóa scenes/idea/script/audio refs. Rename chỉ đổi tên; delete chỉ xóa row. Import preset đọc tối đa 64 KiB kể cả body không Content-Length trước deserialize/validate, không lưu nội dung media hoặc secret.
+
+Frontend draft()/applyDraft() chia sẻ cấu trúc document. Mở checkpoint/preset chỉ thay draft, giữ documentVersion hiện tại, remount editor để reset history/selection; lưu dùng PUT version hiện có. Compare tính khác biệt scene IDs, nội dung và trường cấu hình, không gọi render. Export checkpoint dùng package storyboard đã có; preset dùng flowvideo.render-preset schemaVersion 1. Source media không được copy vào checkpoint; clone project cũ không copy SavedWorkspaceItems.
+
+Preflight dùng ffprobe với gate hai request, timeout tổng 30 giây; đọc snapshot theo version, kiểm tra file, metadata, source bounds, padding và track audio. Chỉ là báo cáo, không queue hoặc gọi AI. Summary đếm asset byte còn tồn tại, document đã lưu và mọi job; queue stats/search frontend dùng 100 job gần nhất.
+
+Storyboard.CreateRequest() là đường dựng snapshot chung. Render-variants lưu hai request khác Ratio trong một SaveChanges transaction; worker vẫn FIFO. Duplicate job chỉ nhận Succeeded, giữ nguyên RequestJson và tạo ID mới, không sửa source job. Điều chỉnh draft sau intake không ảnh hưởng các job này.
+
+Scene multi-select dùng ID; batch mutations qua commit/undo bounded 20 bước. Reading durations và Fisher–Yates là utility thuần, không đổi asset hoặc gọi TTS. SRT parser có chế độ không ép thứ tự chỉ cho action sort; mọi kết quả ghi lại phải qua validation strict. Timeline table là snapshot, giới hạn 200 rows.

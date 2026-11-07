@@ -1,5 +1,5 @@
 import { RenderOptions, defaultEffects } from './render-options';
-import { scaleDurations } from './creator-utils';
+import { scaleDurations, readingDurations, shuffled } from './creator-utils';
 import { Component, computed, input, model, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 export interface ImageRow {
@@ -44,6 +44,57 @@ export class StoryboardEditor {
   fadeSeconds = model(0);
   duckMusic = model(false);
   exportText = output<string>();
+  exportSelected = output<SceneDraft[]>();
+  renderVariants = output<void>();
+  selection = signal<string[]>([]);
+  selectedScenes = computed(() => this.scenes().filter((s) => this.selection().includes(s.id)));
+  readingSpeed = 150;
+  selectAllScenes() {
+    this.selection.set(this.scenes().map((s) => s.id));
+  }
+  selectScene(id: string) {
+    this.selection.update((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  }
+  selectionAction(action: string) {
+    const ids = new Set(this.selectedScenes().map((s) => s.id));
+    if (!ids.size) return;
+    if (action === 'duplicate') {
+      if (this.scenes().length + ids.size > 30) {
+        this.actionError.set('Nhân bản sẽ vượt 30 cảnh.');
+        return;
+      }
+      this.commit((s) =>
+        s.flatMap((c) =>
+          ids.has(c.id)
+            ? [c, { ...c, id: crypto.randomUUID(), title: c.title.slice(0, 109) + ' (bản sao)' }]
+            : [c],
+        ),
+      );
+    } else if (action === 'remove') {
+      this.commit((s) => s.filter((c) => !ids.has(c.id)));
+      this.selection.set([]);
+    } else if (action === 'first' || action === 'last')
+      this.commit((s) =>
+        action === 'first'
+          ? [...s.filter((c) => ids.has(c.id)), ...s.filter((c) => !ids.has(c.id))]
+          : [...s.filter((c) => !ids.has(c.id)), ...s.filter((c) => ids.has(c.id))],
+      );
+    else if (action === 'export') this.exportSelected.emit(structuredClone(this.selectedScenes()));
+  }
+  readingTiming() {
+    try {
+      const durations = readingDurations(
+        this.scenes().map((s) => s.narration),
+        this.readingSpeed,
+      );
+      this.commit((s) => s.map((c, i) => ({ ...c, duration: durations[i] })));
+    } catch (e) {
+      this.actionError.set(e instanceof Error ? e.message : 'Không tính được thời lượng.');
+    }
+  }
+  shuffle() {
+    this.commit((s) => shuffled(s));
+  }
   undoStack = signal<SceneDraft[][]>([]);
   redoStack = signal<SceneDraft[][]>([]);
   actionError = signal('');

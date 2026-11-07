@@ -1,5 +1,14 @@
 import { RenderOptions, defaultEffects } from './render-options';
-import { transformSrt, webVtt, subtitleAnalysis, subtitlePlainText } from './creator-utils';
+import {
+  transformSrt,
+  webVtt,
+  subtitleAnalysis,
+  subtitlePlainText,
+  parseSrt,
+  stamp,
+  compareDocuments,
+  Cue,
+} from './creator-utils';
 import {
   Component,
   OnDestroy,
@@ -88,11 +97,32 @@ export class App implements OnInit, OnDestroy {
   boardFade = signal(0);
   effects = signal(defaultEffects());
   boardEffects = signal(defaultEffects());
+  savedItems = signal<any[]>([]);
+  itemName = 'Mốc mới';
+  boardSession = signal(0);
+  comparison = signal('');
+  workflowReport = signal('');
+  subtitleRows = signal<Cue[]>([]);
+  subtitleMinimum = 1;
+  subtitleCase = 'upper';
+  jobQuery = signal('');
+  queueStats = computed(() =>
+    ['Queued', 'Running', 'Succeeded', 'Failed', 'Cancelled'].map((status) => ({
+      status,
+      count: this.jobs().filter((j) => j.status === status).length,
+    })),
+  );
   jobFilter = signal('all');
   jobSort = signal('newest');
   filteredJobs = computed(() =>
     this.jobs()
-      .filter((j) => this.jobFilter() === 'all' || j.status === this.jobFilter())
+      .filter(
+        (j) =>
+          (this.jobFilter() === 'all' || j.status === this.jobFilter()) &&
+          (j.id + ' ' + j.message + ' ' + this.status(j.status))
+            .toLocaleLowerCase('vi')
+            .includes(this.jobQuery().trim().toLocaleLowerCase('vi')),
+      )
       .slice()
       .sort((a, b) =>
         this.jobSort() === 'newest'
@@ -223,7 +253,7 @@ export class App implements OnInit, OnDestroy {
       const body = await r.json().catch(() => ({}));
       throw new Error(body.error || body.detail || 'Yêu cầu thất bại (' + r.status + ').');
     }
-    return r.json();
+    return r.status === 204 ? null : r.json();
   }
   async perform(fn: () => Promise<void>) {
     if (this.busy() || this.destroyed) return;
@@ -253,6 +283,13 @@ export class App implements OnInit, OnDestroy {
   async selectProject(id: string) {
     const version = ++this.projectVersion;
     this.projectId.set(id);
+    this.savedItems.set([]);
+    this.comparison.set('');
+    this.workflowReport.set('');
+    this.subtitleRows.set([]);
+    this.jobQuery.set('');
+    this.jobFilter.set('all');
+    this.boardSession.update((v) => v + 1);
     this.renameProjectText = this.projects().find((p) => p.id === id)?.name || '';
     this.librarySelected.set([]);
     this.boardFit.set('contain');
@@ -304,23 +341,11 @@ export class App implements OnInit, OnDestroy {
       }),
       this.refreshJobs(),
       this.refreshImages(),
+      this.refreshSavedItems(),
       this.api('/projects/' + id + '/document').then((result) => {
         if (version !== this.projectVersion || this.destroyed) return;
         const doc = result.document;
-        this.idea = doc.idea;
-        this.script.set(doc.script);
-        this.scenes.set(doc.scenes || []);
-        this.boardRatio.set(doc.ratio);
-        this.boardVoice.set(doc.voiceId || '');
-        this.boardMusic.set(doc.musicId || '');
-        this.boardCaptions.set(doc.autoCaptions);
-        this.boardFit.set(doc.fit ?? 'contain');
-        this.boardFade.set(doc.fadeSeconds ?? 0);
-        this.boardDuck.set(doc.duckMusic ?? false);
-        this.boardEffects.set({ ...defaultEffects(), ...doc.effects });
-        this.boardResolution.set(doc.resolution ?? 720);
-        this.boardVoiceGain.set(doc.voiceGain ?? 1);
-        this.boardMusicGain.set(doc.musicGain ?? 0.18);
+        this.applyDraft(doc);
         this.documentVersion.set(result.version);
         this.documentLoaded.set(true);
       }),
@@ -526,6 +551,218 @@ export class App implements OnInit, OnDestroy {
       this.notice.set('Đã lưu bản phụ đề mới và chọn trong Studio. Các bản trước vẫn được giữ.');
     });
   }
+  private draft() {
+    return {
+      idea: this.idea,
+      script: this.script(),
+      scenes: this.scenes(),
+      ratio: this.boardRatio(),
+      voiceId: this.boardVoice() || null,
+      musicId: this.boardMusic() || null,
+      autoCaptions: this.boardCaptions(),
+      fit: this.boardFit(),
+      fadeSeconds: this.boardFade(),
+      duckMusic: this.boardDuck(),
+      effects: this.boardEffects(),
+      resolution: this.boardResolution(),
+      voiceGain: this.boardVoiceGain(),
+      musicGain: this.boardMusicGain(),
+    };
+  }
+  private applyDraft(doc: any) {
+    this.idea = doc.idea;
+    this.script.set(doc.script);
+    this.scenes.set(doc.scenes || []);
+    this.boardRatio.set(doc.ratio);
+    this.boardVoice.set(doc.voiceId || '');
+    this.boardMusic.set(doc.musicId || '');
+    this.boardCaptions.set(doc.autoCaptions);
+    this.boardFit.set(doc.fit ?? 'contain');
+    this.boardFade.set(doc.fadeSeconds ?? 0);
+    this.boardDuck.set(doc.duckMusic ?? false);
+    this.boardEffects.set({ ...defaultEffects(), ...doc.effects });
+    this.boardResolution.set(doc.resolution ?? 720);
+    this.boardVoiceGain.set(doc.voiceGain ?? 1);
+    this.boardMusicGain.set(doc.musicGain ?? 0.18);
+  }
+  private applySettings(doc: any) {
+    const draft = this.draft();
+    this.applyDraft({
+      ...draft,
+      ratio: doc.ratio,
+      autoCaptions: doc.autoCaptions,
+      resolution: doc.resolution,
+      voiceGain: doc.voiceGain,
+      musicGain: doc.musicGain,
+      fit: doc.fit,
+      fadeSeconds: doc.fadeSeconds,
+      duckMusic: doc.duckMusic,
+      effects: doc.effects,
+    });
+  }
+  async refreshSavedItems() {
+    const id = this.projectId();
+    const items = await this.api('/projects/' + id + '/saved-items');
+    if (id === this.projectId()) this.savedItems.set(items);
+  }
+  async captureItem(kind: string) {
+    await this.perform(async () => {
+      const version = await this.storeDocument();
+      await this.api('/projects/' + this.projectId() + '/saved-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind, name: this.itemName, version }),
+      });
+      await this.refreshSavedItems();
+      this.notice.set('Đã lưu ' + (kind === 'preset' ? 'preset' : 'mốc khôi phục') + '.');
+    });
+  }
+  async useSavedItem(item: any, action: string) {
+    await this.perform(async () => {
+      const result = await this.api('/projects/' + this.projectId() + '/saved-items/' + item.id);
+      if (action === 'compare') {
+        this.comparison.set(
+          'Mốc: ' + item.name + '\n' + compareDocuments(result.document, this.draft()),
+        );
+        return;
+      }
+      if (item.kind === 'preset') this.applySettings(result.document);
+      else this.applyDraft(result.document);
+      this.boardSession.update((v) => v + 1);
+      this.comparison.set('');
+      this.workflowReport.set('');
+      this.notice.set(
+        'Đã mở vào bản nháp. Bấm Lưu storyboard để giữ thay đổi; bản đã lưu chưa bị thay.',
+      );
+    });
+  }
+  async renameSavedItem(item: any) {
+    await this.perform(async () => {
+      await this.api('/projects/' + this.projectId() + '/saved-items/' + item.id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: item.name }),
+      });
+      await this.refreshSavedItems();
+      this.notice.set('Đã đổi tên mục đã lưu.');
+    });
+  }
+  async deleteSavedItem(item: any) {
+    if (!confirm('Xóa ' + item.name + '? Mục này sẽ mất; storyboard và media vẫn được giữ.'))
+      return;
+    await this.perform(async () => {
+      await this.api('/projects/' + this.projectId() + '/saved-items/' + item.id, {
+        method: 'DELETE',
+      });
+      await this.refreshSavedItems();
+      this.notice.set('Đã xóa mục đã lưu.');
+    });
+  }
+  async importPreset(event: Event) {
+    const input = event.target as HTMLInputElement,
+      file = input.files?.[0];
+    if (!file) return;
+    await this.perform(async () => {
+      if (file.size > 65536) throw new Error('Preset tối đa 64 KiB.');
+      const text = (await file.text()).replace(/^\uFEFF/, '');
+      const data = JSON.parse(text);
+      await this.api('/projects/' + this.projectId() + '/saved-items/import-preset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      await this.refreshSavedItems();
+      this.notice.set('Đã nhập preset. Chọn Áp preset để dùng.');
+    });
+    input.value = '';
+  }
+  async projectSummary() {
+    await this.perform(async () => {
+      const summary = await this.api('/projects/' + this.projectId() + '/summary');
+      this.workflowReport.set(
+        `${summary.assetCount} tài nguyên · ${(summary.bytes / 1048576).toFixed(2)} MiB · ${summary.missingFiles} file thiếu\n${summary.scenes} cảnh · ${summary.duration.toFixed(1)} giây · bản lưu v${summary.version}\n${summary.checkpoints} mốc · ${summary.presets} preset\n` +
+          summary.jobs.map((j: any) => this.status(j.status) + ': ' + j.count).join(' · '),
+      );
+    });
+  }
+  async preflight() {
+    await this.perform(async () => {
+      const version = await this.storeDocument();
+      const result = await this.api('/projects/' + this.projectId() + '/storyboard/preflight', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version }),
+      });
+      this.workflowReport.set(
+        'Kiểm tra bản lưu v' +
+          result.version +
+          ' — chạy lại sau khi chỉnh.\n' +
+          (result.ready ? 'Không có lỗi chặn dựng.' : 'Có lỗi cần sửa trước khi dựng.') +
+          '\n' +
+          result.issues
+            .map(
+              (i: any) =>
+                (i.severity === 'error' ? 'Lỗi: ' : 'Lưu ý: ') +
+                (i.sceneId ? '[' + i.sceneId.slice(0, 8) + '] ' : '') +
+                i.message,
+            )
+            .join('\n'),
+      );
+    });
+  }
+  async renderVariants() {
+    await this.perform(async () => {
+      const version = await this.storeDocument();
+      await this.api('/projects/' + this.projectId() + '/storyboard/render-variants', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version }),
+      });
+      await this.refreshJobs();
+      this.schedulePoll();
+      this.tab.set('studio');
+      this.notice.set('Đã xếp hàng hai bản 9:16 và 16:9, dùng cùng snapshot.');
+    });
+  }
+  async repeatJob(id: string) {
+    await this.perform(async () => {
+      await this.api('/jobs/' + id + '/duplicate', { method: 'POST' });
+      await this.refreshJobs();
+      this.schedulePoll();
+      this.notice.set('Đã tạo job mới từ snapshot hoàn tất, không thay job cũ.');
+    });
+  }
+  async exportSceneSelection(scenes: SceneDraft[]) {
+    await this.perform(async () => {
+      if (!scenes.length) throw new Error('Chọn ít nhất một cảnh.');
+      await this.storeDocument();
+      this.downloadJson(
+        {
+          format: 'flowvideo.storyboard',
+          schemaVersion: 1,
+          name:
+            (this.projects().find((p) => p.id === this.projectId())?.name || 'Storyboard').slice(
+              0,
+              100,
+            ) + ' · cảnh chọn',
+          document: { ...this.draft(), scenes },
+        },
+        'flowvideo-selected-scenes.json',
+      );
+      this.notice.set('Đã xuất các cảnh được chọn; JSON không kèm file media.');
+    });
+  }
+  showSubtitleTimeline() {
+    this.error.set('');
+    try {
+      this.subtitleRows.set(parseSrt(this.subtitleContent));
+    } catch (e) {
+      this.error.set(e instanceof Error ? e.message : 'SRT không hợp lệ.');
+    }
+  }
+  formatCue(ms: number) {
+    return stamp(ms);
+  }
   private async storeDocument() {
     if (!this.documentLoaded())
       throw new Error('Chưa tải xong dự án. Hãy tải lại trang trước khi lưu.');
@@ -534,22 +771,7 @@ export class App implements OnInit, OnDestroy {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         version: this.documentVersion(),
-        document: {
-          idea: this.idea,
-          script: this.script(),
-          scenes: this.scenes(),
-          ratio: this.boardRatio(),
-          voiceId: this.boardVoice() || null,
-          musicId: this.boardMusic() || null,
-          autoCaptions: this.boardCaptions(),
-          fit: this.boardFit(),
-          fadeSeconds: this.boardFade(),
-          duckMusic: this.boardDuck(),
-          effects: this.boardEffects(),
-          resolution: this.boardResolution(),
-          voiceGain: this.boardVoiceGain(),
-          musicGain: this.boardMusicGain(),
-        },
+        document: this.draft(),
       }),
     });
     this.documentVersion.set(result.version);
@@ -805,7 +1027,9 @@ export class App implements OnInit, OnDestroy {
                   ? this.subtitleSplit
                   : action === 'clamp'
                     ? this.subtitleClamp
-                    : this.mergeGap;
+                    : action === 'minimum'
+                      ? this.subtitleMinimum
+                      : this.mergeGap;
         this.subtitleContent = transformSrt(
           this.subtitleContent,
           action,

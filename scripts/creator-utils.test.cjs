@@ -159,3 +159,94 @@ test("reading report spots rapid and overlapping cues; text export omits formatt
   assert(report.includes("1 câu vượt 20"));
   assert.equal(subtitlePlainText(input), "Xin chào mọi người\n\nFlowVideo\n");
 });
+
+test("sort repairs unordered SRT while preserving ties and every cue", () => {
+  const input =
+    "2\n00:00:03,000 --> 00:00:04,000\nB\n\n1\n00:00:01,000 --> 00:00:02,000\nA\n\n3\n00:00:01,000 --> 00:00:02,500\nC";
+  assert.throws(() => parseSrt(input));
+  const result = parseSrt(transformSrt(input, "sort", 0));
+  assert.deepEqual(
+    result.map((c) => c.text),
+    ["A", "C", "B"],
+  );
+  assert.throws(() =>
+    transformSrt(input.replace("00:00:04,000", "00:00:02,000"), "sort", 0),
+  );
+});
+test("overlap repair and minimum duration retain all words and avoid zero-length cues", () => {
+  const input = writeSrt([
+    { start: 0, end: 2000, text: "A" },
+    { start: 0, end: 1000, text: "B" },
+    { start: 500, end: 2500, text: "C" },
+  ]);
+  for (const [action, amount] of [
+    ["overlaps", 0],
+    ["minimum", 1.5],
+  ]) {
+    const result = parseSrt(transformSrt(input, action, amount));
+    assert.deepEqual(
+      result.map((c) => c.text),
+      ["A", "B", "C"],
+    );
+    assert(
+      result.every(
+        (c, i) => c.end > c.start && (i === 0 || c.start >= result[i - 1].end),
+      ),
+    );
+    if (action === "minimum")
+      assert(result.every((c) => c.end - c.start >= 1500));
+  }
+  assert.throws(() => transformSrt(input, "minimum", 11));
+});
+test("whitespace and case normalize Vietnamese without altering formatting tags", () => {
+  const input = writeSrt([
+    { start: 0, end: 1000, text: "  <b>xin   chào</b>  \n  bạn  " },
+  ]);
+  const clean = transformSrt(input, "whitespace", 0);
+  assert.equal(parseSrt(clean)[0].text, "<b>xin chào</b>\nbạn");
+  const upper = transformSrt(clean, "upper", 0);
+  assert.equal(parseSrt(upper)[0].text, "<b>XIN CHÀO</b>\nBẠN");
+  assert.equal(
+    parseSrt(transformSrt(upper, "lower", 0))[0].text,
+    "<b>xin chào</b>\nbạn",
+  );
+});
+test("reading timing enforces bounds and shuffle is immutable with deterministic randomness", () => {
+  const {
+    readingDurations,
+    shuffled,
+  } = require("../src/Studio.Web/src/app/creator-utils.ts");
+  assert.deepEqual(readingDurations(["xin chào", ""], 120), [1, 0.1]);
+  assert.throws(() => readingDurations(["text"], 10));
+  assert.throws(() => readingDurations([Array(1000).fill("từ").join(" ")], 60));
+  const input = [1, 2, 3, 4];
+  assert.deepEqual(
+    shuffled(input, () => 0),
+    [2, 3, 4, 1],
+  );
+  assert.deepEqual(input, [1, 2, 3, 4]);
+  assert.throws(() => shuffled(input, () => NaN));
+});
+test("checkpoint comparison reports changed, removed, added scenes and settings", () => {
+  const {
+    compareDocuments,
+  } = require("../src/Studio.Web/src/app/creator-utils.ts");
+  const result = compareDocuments(
+    {
+      scenes: [
+        { id: "a", title: "A" },
+        { id: "b", title: "B" },
+      ],
+      ratio: "9:16",
+    },
+    {
+      scenes: [
+        { id: "a", title: "Changed" },
+        { id: "c", title: "C" },
+      ],
+      ratio: "16:9",
+    },
+  );
+  assert(result.includes("thêm 1 cảnh, bỏ 1 cảnh, sửa 1 cảnh"));
+  assert(result.includes("ratio"));
+});

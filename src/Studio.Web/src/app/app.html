@@ -68,7 +68,7 @@
         ></span
       >
       <div class="header-right">
-        <span class="pill">MVP v0.8</span
+        <span class="pill">MVP v0.9</span
         ><select
           aria-label="Chọn dự án"
           [ngModel]="projectId()"
@@ -328,6 +328,18 @@
               <h2>Hàng đợi render</h2>
               <span>100 tác vụ gần nhất · tự cập nhật</span>
             </div>
+            <div class="queue-stats" role="status">
+              @for (row of queueStats(); track row.status) {
+                <span>{{ status(row.status) }}: {{ row.count }}</span>
+              }
+            </div>
+            <label
+              >Tìm tác vụ render<input
+                type="search"
+                [ngModel]="jobQuery()"
+                (ngModelChange)="jobQuery.set($event)"
+                placeholder="ID hoặc thông báo…"
+            /></label>
             <div class="library-tools">
               <label
                 >Lọc trạng thái render<select
@@ -366,6 +378,9 @@
                   @if (j.hasAudio) {
                     <a class="download" [href]="'/api/jobs/' + j.id + '/audio'">Tải audio MP3 ↓</a>
                   }
+                  <button class="secondary" (click)="repeatJob(j.id)" [disabled]="busy()">
+                    Dựng lại bản hoàn tất
+                  </button>
                   <button
                     class="secondary"
                     (click)="preview.set('/api/jobs/' + j.id + '/download')"
@@ -564,32 +579,113 @@
       }
       @if (tab() === 'board') {
         @if (projectId() && documentLoaded()) {
-          <app-storyboard
-            [(scenes)]="scenes"
-            [(effects)]="boardEffects"
-            [(fit)]="boardFit"
-            [(fadeSeconds)]="boardFade"
-            [(duckMusic)]="boardDuck"
-            (exportText)="downloadWorkspace($event)"
-            [(ratio)]="boardRatio"
-            [(voiceId)]="boardVoice"
-            [(musicId)]="boardMusic"
-            [(autoCaptions)]="boardCaptions"
-            [(resolution)]="boardResolution"
-            [(voiceGain)]="boardVoiceGain"
-            [(musicGain)]="boardMusicGain"
-            (export)="exportStoryboard()"
-            [assets]="assets()"
-            [imageEnabled]="imageEnabled()"
-            [imageJobs]="imageJobs()"
-            [imageUsed]="imageUsed()"
-            [imageLimit]="imageLimit()"
-            (generateImage)="generateSceneImage($event)"
-            [disabled]="busy()"
-            [version]="documentVersion()"
-            (save)="saveDocument()"
-            (render)="renderStoryboard()"
-          />
+          <section class="panel saved-workflow">
+            <details>
+              <summary>Mốc lưu, preset & kiểm tra dự án</summary>
+              <div class="subtitle-toolbar">
+                <label
+                  >Tên mốc hoặc preset mới<input [(ngModel)]="itemName" maxlength="120" /></label
+                ><button
+                  (click)="captureItem('checkpoint')"
+                  [disabled]="busy() || !itemName.trim()"
+                >
+                  Lưu mốc khôi phục</button
+                ><button (click)="captureItem('preset')" [disabled]="busy() || !itemName.trim()">
+                  Lưu preset dựng
+                </button>
+                <label class="secondary import-file"
+                  >Nhập preset dựng<input
+                    type="file"
+                    accept=".json,application/json"
+                    aria-label="Nhập preset dựng"
+                    (change)="importPreset($event)"
+                    [disabled]="busy()"
+                /></label>
+              </div>
+              <p class="hint">
+                Lưu mốc/preset sẽ lưu storyboard hiện tại trước. Mở mốc thay bản nháp; áp preset giữ
+                nguyên cảnh và liên kết audio. Bấm Lưu để giữ bản vừa mở. Mỗi dự án tối đa 20 mốc và
+                20 preset.
+              </p>
+              @for (item of savedItems(); track item.id) {
+                <div class="saved-row" [attr.data-kind]="item.kind">
+                  <label
+                    >{{ item.kind === 'checkpoint' ? 'Mốc khôi phục' : 'Preset dựng'
+                    }}<input
+                      [(ngModel)]="item.name"
+                      [attr.aria-label]="'Tên mục ' + item.id"
+                      maxlength="120"
+                  /></label>
+                  <button (click)="useSavedItem(item, 'apply')" [disabled]="busy()">
+                    {{
+                      item.kind === 'checkpoint'
+                        ? 'Mở mốc vào bản nháp'
+                        : 'Áp preset lên storyboard'
+                    }}
+                  </button>
+                  @if (item.kind === 'checkpoint') {
+                    <button (click)="useSavedItem(item, 'compare')" [disabled]="busy()">
+                      So sánh mốc với bản nháp
+                    </button>
+                  }
+                  <button (click)="renameSavedItem(item)" [disabled]="busy()">
+                    Đổi tên mục đã lưu
+                  </button>
+                  <a
+                    class="download"
+                    [href]="'/api/projects/' + projectId() + '/saved-items/' + item.id + '/export'"
+                    >Xuất {{ item.kind === 'checkpoint' ? 'mốc' : 'preset' }} JSON ↓</a
+                  >
+                  <button (click)="deleteSavedItem(item)" [disabled]="busy()">
+                    Xóa mục đã lưu
+                  </button>
+                </div>
+              } @empty {
+                <p>Chưa có mốc hoặc preset.</p>
+              }
+              @if (comparison()) {
+                <pre class="subtitle-report" role="status">{{ comparison() }}</pre>
+              }
+              <div class="subtitle-actions">
+                <button (click)="projectSummary()" [disabled]="busy()">
+                  Tổng quan dữ liệu dự án</button
+                ><button (click)="preflight()" [disabled]="busy()">Kiểm tra trước khi dựng</button>
+              </div>
+              @if (workflowReport()) {
+                <pre class="subtitle-report" role="status">{{ workflowReport() }}</pre>
+              }
+            </details>
+          </section>
+          @for (session of [boardSession()]; track session) {
+            <app-storyboard
+              [(scenes)]="scenes"
+              (exportSelected)="exportSceneSelection($event)"
+              (renderVariants)="renderVariants()"
+              [(effects)]="boardEffects"
+              [(fit)]="boardFit"
+              [(fadeSeconds)]="boardFade"
+              [(duckMusic)]="boardDuck"
+              (exportText)="downloadWorkspace($event)"
+              [(ratio)]="boardRatio"
+              [(voiceId)]="boardVoice"
+              [(musicId)]="boardMusic"
+              [(autoCaptions)]="boardCaptions"
+              [(resolution)]="boardResolution"
+              [(voiceGain)]="boardVoiceGain"
+              [(musicGain)]="boardMusicGain"
+              (export)="exportStoryboard()"
+              [assets]="assets()"
+              [imageEnabled]="imageEnabled()"
+              [imageJobs]="imageJobs()"
+              [imageUsed]="imageUsed()"
+              [imageLimit]="imageLimit()"
+              (generateImage)="generateSceneImage($event)"
+              [disabled]="busy()"
+              [version]="documentVersion()"
+              (save)="saveDocument()"
+              (render)="renderStoryboard()"
+            />
+          }
         } @else {
           <section class="panel"><p>Chọn hoặc tạo dự án để bắt đầu storyboard.</p></section>
         }
@@ -718,6 +814,63 @@
             <details class="batch-tools" open>
               <summary>Công cụ phụ đề hàng loạt</summary>
               <div class="subtitle-toolbar">
+                <button (click)="subtitleTool('sort')" [disabled]="busy()">
+                  Sắp lại thứ tự câu SRT</button
+                ><button (click)="subtitleTool('overlaps')" [disabled]="busy()">
+                  Xử lý mốc SRT chồng lấn
+                </button>
+                <label
+                  >Thời lượng câu tối thiểu (s)<input
+                    type="number"
+                    min="0.1"
+                    max="10"
+                    step="0.1"
+                    [(ngModel)]="subtitleMinimum" /></label
+                ><button (click)="subtitleTool('minimum')" [disabled]="busy()">
+                  Giãn câu SRT quá ngắn
+                </button>
+                <button (click)="subtitleTool('whitespace')" [disabled]="busy()">
+                  Chuẩn hóa khoảng trắng SRT
+                </button>
+                <label
+                  >Kiểu chữ SRT<select [(ngModel)]="subtitleCase" aria-label="Kiểu chữ SRT">
+                    <option value="upper">CHỮ HOA</option>
+                    <option value="lower">chữ thường</option>
+                  </select></label
+                ><button (click)="subtitleTool(subtitleCase)" [disabled]="busy()">
+                  Đổi kiểu chữ SRT
+                </button>
+                <button (click)="showSubtitleTimeline()" [disabled]="busy()">
+                  Xem bảng timeline SRT
+                </button>
+              </div>
+              @if (subtitleRows().length) {
+                <div class="timeline-table">
+                  <p>
+                    Bản chụp {{ subtitleRows().length }} câu tại lúc bấm xem; hiển thị tối đa 200
+                    câu đầu.
+                  </p>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Vào → ra</th>
+                        <th>Lời</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (cue of subtitleRows().slice(0, 200); track $index) {
+                        <tr>
+                          <td>{{ $index + 1 }}</td>
+                          <td>{{ formatCue(cue.start) }} → {{ formatCue(cue.end) }}</td>
+                          <td>{{ cue.text }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+              <div class="subtitle-toolbar">
                 <button (click)="subtitleTool('strip')" [disabled]="busy()">
                   Xóa định dạng SRT
                 </button>
@@ -836,13 +989,14 @@
       }
       @if (tab() === 'roadmap') {
         <section class="panel roadmap">
-          <h2>Đã hoạt động trong v0.8</h2>
+          <h2>Đã hoạt động trong v0.9</h2>
           <p>
-            v0.8 thêm hiệu chỉnh hình/âm thanh, fps/chất lượng, công cụ lấy thumbnail, khung hình,
-            sóng âm, audio và xử lý SRT. Có lọc/sắp xếp job, tải cấu hình JSON và audio của bản
-            xuất. Quản lý dự án và media, cắt điểm vào/ra từng clip, ghép ảnh/video, loop trực tiếp,
-            audio từ file, phụ đề SRT, hàng đợi lưu SQLite và tải MP4. Viết kịch bản, tạo giọng đọc
-            và nhận diện phụ đề AI khi có API key. Chỉnh sửa SRT không cần AI.
+            v0.9 thêm mốc khôi phục, preset dựng cá nhân, so sánh bản nháp, kiểm tra trước khi dựng,
+            thao tác nhóm cảnh, căn cảnh theo lời và xử lý mốc SRT. Có dựng hai tỉ lệ, dựng lại bản
+            hoàn tất và thống kê/tìm tác vụ. Quản lý dự án và media, cắt điểm vào/ra từng clip, ghép
+            ảnh/video, loop trực tiếp, audio từ file, phụ đề SRT, hàng đợi lưu SQLite và tải MP4.
+            Viết kịch bản, tạo giọng đọc và nhận diện phụ đề AI khi có API key. Chỉnh sửa SRT không
+            cần AI.
           </p>
           <h2>Giai đoạn tiếp theo</h2>
           <p>1. Tự động tạo ảnh và giọng cho toàn storyboard.</p>

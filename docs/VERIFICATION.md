@@ -1,4 +1,4 @@
-# Kiểm chứng bản v0.8
+# Kiểm chứng bản v0.9
 
 Đã chạy trong môi trường Linux với .NET SDK 10.0.403, Node.js 24 và FFmpeg:
 
@@ -40,7 +40,7 @@ Phép đo trước/sau và giới hạn diễn giải xem tại [PERFORMANCE.md]
 - Startup đánh dấu Running Unknown, chỉ tiếp tục Queued. Kiểm tra thiếu key, phiên bản cũ, prompt rỗng và dọn file.
 - Browser dùng capability/image job API mô phỏng để kiểm tra queued/succeeded, chọn ảnh vào cảnh và dựng thật. Không có API key thật hoặc yêu cầu tính phí trong test.
 
-Tổng bộ integration tests hiện có 53 trường hợp. Chưa kiểm chứng chất lượng ảnh/quyền model/độ trễ thực tế bằng tài khoản OpenAI của người dùng.
+Tổng bộ integration tests hiện có 59 trường hợp. Chưa kiểm chứng chất lượng ảnh/quyền model/độ trễ thực tế bằng tài khoản OpenAI của người dùng.
 
 ## Đợt 10 chức năng
 
@@ -73,3 +73,13 @@ Lệnh mới: `npm run test:tools` trong `src/Studio.Web`. CI chạy cùng build
 - Browser: cấu hình đủ 16 option, lưu/snapshot render, tạo/tải thumbnail và waveform, trích frame/audio vào thư viện, 6 công cụ SRT, job filter/sort, tải recipe/MP3 và layout desktop/mobile.
 
 Các test không gửi request trả phí. Sinh video AI chưa được triển khai hoặc kiểm chứng trong đợt này.
+
+
+## Đợt 30 chức năng v0.9
+
+- 6 integration tests mới, tổng .NET 59: capture/version/scope/rename/delete/export/restore checkpoint; preset detaches nội dung và kiểm tra JSON/body chunked quá giới hạn; 20 mục/kind và upgrade idempotent giữ project/media; summary/preflight nguồn padded/start sai/file mất; audio hỏng và thiếu binding; hai render thật khác ratio, snapshot giữ lời/fps, duplicate Succeeded và chặn trạng thái khác.
+- Node tổng 17 bài: sort SRT ổn định, overlap/minimum không mất lời hoặc tạo cue rỗng, whitespace/case tiếng Việt giữ tag, reading timing/shuffle immutable và compare checkpoints.
+- Browser: mốc lưu/khôi phục/so sánh/đổi tên/xuất; preset lưu/áp/đổi tên/nhập/xuất/xóa xác nhận; summary/preflight; multiselect/batch/undo/export/timing/shuffle; 6 công cụ SRT; hai render dọc/ngang thật, repeat job, queue stats/search và mobile.
+- Media smoke cũ tiếp tục chạy cho concat/loop/trim, caption/audio, gain/fade/duck/effects, cancellation, errors/retry và restart persistence.
+
+Không gọi AI trả phí. Sinh video AI vẫn chưa được triển khai hoặc kiểm chứng trong v0.9.

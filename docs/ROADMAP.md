@@ -71,6 +71,15 @@
 - [x] 4 tiện ích hàng đợi/bản xuất: filter, sort, recipe và MP3.
 - [x] Hướng dẫn từng mục: [BATCH-V08](BATCH-V08.md).
 
+## V0.9 — đợt 30 chức năng đã bổ sung
+
+- [x] Mốc lưu/khôi phục/so sánh và preset cá nhân có SQLite.
+- [x] Nhập/xuất/đổi tên/xóa mục, summary và preflight metadata.
+- [x] Multiselect/batch scenes, reading timing, shuffle và xuất nhóm.
+- [x] SRT sort/overlap/minimum/whitespace/case và bảng timeline.
+- [x] Hai aspect ratio từ cùng snapshot, repeat Succeeded, queue stats/search.
+- [x] Danh sách đủ 30 mục: [BATCH-V09](BATCH-V09.md).
+
 ## Tiếp theo — chất lượng nền tảng (2–3 tuần)
 
 - ffprobe kiểm tra file ngay sau upload; duration, thumbnail, waveform

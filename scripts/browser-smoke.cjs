@@ -1091,6 +1091,373 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     console.log(
       "PASS v0.8 browser: 16 persisted effects, thumbnail/waveform/frame/extract audio, 6 subtitle tools, queue filters/sort, recipe JSON and rendered MP3 download",
     );
+    // v0.9 durable checkpoints/presets, multi-scene tools, preflight and variant renders.
+    const workflow = page.locator(".saved-workflow");
+    await workflow.locator("summary").click();
+    const checkpointTitle = await board
+      .getByLabel("Tên cảnh", { exact: true })
+      .first()
+      .inputValue();
+    await workflow
+      .getByLabel("Tên mốc hoặc preset mới", { exact: true })
+      .fill("Mốc v09");
+    await workflow
+      .getByRole("button", { name: "Lưu mốc khôi phục", exact: true })
+      .click();
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll(".saved-row[data-kind=checkpoint]").length ===
+        1,
+    );
+    const checkpoint = workflow
+      .locator(".saved-row[data-kind=checkpoint]")
+      .first();
+    await board
+      .getByLabel("Tên cảnh", { exact: true })
+      .first()
+      .fill("Bản nháp đã đổi");
+    await checkpoint
+      .getByRole("button", { name: "So sánh mốc với bản nháp", exact: true })
+      .click();
+    await workflow
+      .getByRole("status")
+      .filter({ hasText: "sửa 1 cảnh" })
+      .waitFor();
+    await checkpoint
+      .getByRole("button", { name: "Mở mốc vào bản nháp", exact: true })
+      .click();
+    await page.waitForFunction(
+      (title) =>
+        document.querySelector(
+          "app-storyboard .scene input:not([type=checkbox])",
+        )?.value === title,
+      checkpointTitle,
+    );
+    await checkpoint.locator("input").fill("Mốc đã đổi tên");
+    await checkpoint
+      .getByRole("button", { name: "Đổi tên mục đã lưu", exact: true })
+      .click();
+    let checkpointDownload = page.waitForEvent("download");
+    await checkpoint
+      .getByRole("link", { name: "Xuất mốc JSON ↓", exact: true })
+      .click();
+    const cpFile = await checkpointDownload;
+    const cpPackage = JSON.parse(
+      await fs.readFile(await cpFile.path(), "utf8"),
+    );
+    assert.equal(cpPackage.name, "Mốc đã đổi tên");
+    assert.equal(cpPackage.document.scenes.length, 3);
+    await workflow
+      .getByLabel("Tên mốc hoặc preset mới", { exact: true })
+      .fill("Preset v09");
+    await workflow
+      .getByRole("button", { name: "Lưu preset dựng", exact: true })
+      .click();
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll(".saved-row[data-kind=preset]").length === 1,
+    );
+    const presetRow = workflow.locator(".saved-row[data-kind=preset]").first();
+    await board.locator("app-render-options summary").click();
+    await board.getByLabel("Độ sáng · Storyboard", { exact: true }).fill("0.4");
+    await board
+      .getByLabel("Lời của cảnh", { exact: true })
+      .first()
+      .fill("Giữ lời khi áp preset");
+    await presetRow
+      .getByRole("button", { name: "Áp preset lên storyboard", exact: true })
+      .click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("app-storyboard .scene textarea")?.value ===
+        "Giữ lời khi áp preset",
+    );
+    await board.locator("app-render-options summary").click();
+    await page.waitForFunction(() =>
+      Array.from(
+        document.querySelectorAll("app-render-options input[type=number]"),
+      ).some((el) => el.value === "0.15"),
+    );
+    let presetDownload = page.waitForEvent("download");
+    await presetRow
+      .getByRole("link", { name: "Xuất preset JSON ↓", exact: true })
+      .click();
+    const presetFile = await presetDownload;
+    const presetPath = path.join(temp, "v09-preset.json");
+    await presetFile.saveAs(presetPath);
+    const savedPreset = JSON.parse(await fs.readFile(presetPath, "utf8"));
+    assert.equal(savedPreset.format, "flowvideo.render-preset");
+    assert.deepEqual(savedPreset.settings.scenes, []);
+    assert.equal(savedPreset.settings.voiceId, null);
+    await workflow
+      .getByLabel("Nhập preset dựng", { exact: true })
+      .setInputFiles(presetPath);
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll(".saved-row[data-kind=preset]").length === 2,
+    );
+    const importedPreset = workflow
+      .locator(".saved-row[data-kind=preset]")
+      .first();
+    await importedPreset.locator("input").fill("Preset nhập đổi tên");
+    await importedPreset
+      .getByRole("button", { name: "Đổi tên mục đã lưu", exact: true })
+      .click();
+    page.once("dialog", (dialog) => dialog.accept());
+    await importedPreset
+      .getByRole("button", { name: "Xóa mục đã lưu", exact: true })
+      .click();
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll(".saved-row[data-kind=preset]").length === 1,
+    );
+    await workflow
+      .getByRole("button", { name: "Tổng quan dữ liệu dự án", exact: true })
+      .click();
+    await workflow
+      .getByRole("status")
+      .filter({ hasText: "tài nguyên" })
+      .waitFor();
+    await workflow
+      .getByRole("button", { name: "Kiểm tra trước khi dựng", exact: true })
+      .click();
+    await workflow
+      .getByRole("status")
+      .filter({ hasText: "Không có lỗi chặn dựng." })
+      .waitFor();
+    await board
+      .getByText("Chọn nhiều cảnh & thời lượng theo lời", { exact: true })
+      .click();
+    await board.getByLabel("Chọn cảnh 1", { exact: true }).check();
+    await board.getByLabel("Chọn cảnh 2", { exact: true }).check();
+    await board
+      .getByRole("button", { name: "Nhân bản cảnh đã chọn", exact: true })
+      .click();
+    await page.waitForFunction(
+      () => document.querySelectorAll("app-storyboard .scene").length === 5,
+    );
+    await board
+      .getByRole("button", { name: "Xóa cảnh đã chọn", exact: true })
+      .click();
+    await page.waitForFunction(
+      () => document.querySelectorAll("app-storyboard .scene").length === 3,
+    );
+    await board
+      .getByRole("button", { name: "Hoàn tác cảnh", exact: true })
+      .click();
+    await page.waitForFunction(
+      () => document.querySelectorAll("app-storyboard .scene").length === 5,
+    );
+    await board
+      .getByRole("button", { name: "Hoàn tác cảnh", exact: true })
+      .click();
+    await page.waitForFunction(
+      () => document.querySelectorAll("app-storyboard .scene").length === 3,
+    );
+    await board
+      .getByRole("button", { name: "Bỏ chọn cảnh", exact: true })
+      .click();
+    await board.getByLabel("Chọn cảnh 1", { exact: true }).check();
+    const sceneSelectionDownload = page.waitForEvent("download");
+    await board
+      .getByRole("button", { name: "Xuất JSON cảnh đã chọn", exact: true })
+      .click();
+    const selectionFile = await sceneSelectionDownload;
+    const selectionPackage = JSON.parse(
+      await fs.readFile(await selectionFile.path(), "utf8"),
+    );
+    assert.equal(selectionPackage.document.scenes.length, 1);
+    await board
+      .getByRole("button", { name: "Đưa nhóm về cuối", exact: true })
+      .click();
+    await page.waitForFunction(
+      (title) =>
+        document.querySelector(
+          "app-storyboard .scene:last-child input:not([type=checkbox])",
+        )?.value === title,
+      checkpointTitle,
+    );
+    assert.equal(
+      await board.getByLabel("Tên cảnh", { exact: true }).last().inputValue(),
+      checkpointTitle,
+    );
+    await board
+      .getByRole("button", { name: "Đưa nhóm về đầu", exact: true })
+      .click();
+    await page.waitForFunction(
+      (title) =>
+        document.querySelector(
+          "app-storyboard .scene input:not([type=checkbox])",
+        )?.value === title,
+      checkpointTitle,
+    );
+    await board
+      .getByLabel("Tốc độ đọc để căn cảnh (từ/phút)", { exact: true })
+      .fill("150");
+    await board
+      .getByRole("button", { name: "Căn thời lượng theo lời", exact: true })
+      .click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("app-storyboard .scene .timing input")?.value ===
+        "2",
+    );
+    const beforeShuffle = await board
+      .getByLabel("Tên cảnh", { exact: true })
+      .evaluateAll((els) => els.map((el) => el.value).sort());
+    await board
+      .getByRole("button", { name: "Trộn thứ tự cảnh", exact: true })
+      .click();
+    assert.deepEqual(
+      await board
+        .getByLabel("Tên cảnh", { exact: true })
+        .evaluateAll((els) => els.map((el) => el.value).sort()),
+      beforeShuffle,
+    );
+    await board
+      .getByRole("button", { name: "Chọn tất cả cảnh", exact: true })
+      .click();
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll(
+          "app-storyboard .scene input[type=checkbox]:checked",
+        ).length === 3,
+    );
+    await board
+      .getByRole("button", { name: "Bỏ chọn cảnh", exact: true })
+      .click();
+    await board.getByLabel("Giây cho mỗi cảnh", { exact: true }).fill("1");
+    await board
+      .getByRole("button", { name: "Áp thời lượng tất cả", exact: true })
+      .click();
+    const beforeVariants = await (
+      await page.request.get(
+        "http://127.0.0.1:5099/api/projects/" + clonedProject + "/jobs",
+      )
+    ).json();
+    await board
+      .getByRole("button", { name: "Dựng cả dọc và ngang", exact: true })
+      .click();
+    await page
+      .getByRole("heading", { name: "Hàng đợi render", exact: true })
+      .waitFor();
+    await page.getByLabel("Lọc trạng thái render").selectOption("all");
+    await page.waitForFunction(
+      async (id) => {
+        const jobs = await (
+          await fetch("/api/projects/" + id + "/jobs")
+        ).json();
+        return jobs.length === 3 && jobs.every((j) => j.status === "Succeeded");
+      },
+      clonedProject,
+      { timeout: 120000 },
+    );
+    const afterVariants = await (
+      await page.request.get(
+        "http://127.0.0.1:5099/api/projects/" + clonedProject + "/jobs",
+      )
+    ).json();
+    const variants = afterVariants.filter(
+      (j) => !beforeVariants.some((old) => old.id === j.id),
+    );
+    assert.equal(variants.length, 2);
+    const variantRatios = [];
+    for (const variant of variants) {
+      const recipe = await (
+        await page.request.get(
+          "http://127.0.0.1:5099/api/jobs/" + variant.id + "/recipe",
+        )
+      ).json();
+      variantRatios.push(recipe.request.ratio);
+    }
+    assert.deepEqual(variantRatios.sort(), ["16:9", "9:16"]);
+    await page
+      .getByRole("button", { name: "Dựng lại bản hoàn tất", exact: true })
+      .first()
+      .click();
+    await page.waitForFunction(
+      async (id) =>
+        (await (await fetch("/api/projects/" + id + "/jobs")).json()).length ===
+        4,
+      clonedProject,
+    );
+    await page
+      .getByLabel("Tìm tác vụ render", { exact: true })
+      .fill("not-a-job");
+    await page.waitForFunction(
+      () => document.querySelectorAll(".queue .job").length === 0,
+    );
+    assert(
+      (await page.locator(".queue-stats").innerText()).includes("Hoàn tất"),
+    );
+    await page
+      .getByLabel("Tìm tác vụ render", { exact: true })
+      .fill(variants[0].id);
+    await page.waitForFunction(
+      () => document.querySelectorAll(".queue .job").length === 1,
+    );
+    await page.getByLabel("Tìm tác vụ render", { exact: true }).fill("");
+    await page
+      .getByRole("button", { name: "Giọng đọc & phụ đề", exact: true })
+      .click();
+    await page
+      .getByLabel("Nội dung SRT", { exact: true })
+      .fill(
+        "2\n00:00:01,000 --> 00:00:02,000\n  chào    bạn\n\n1\n00:00:00,000 --> 00:00:01,500\n  xin   chào",
+      );
+    await page
+      .getByRole("button", { name: "Sắp lại thứ tự câu SRT", exact: true })
+      .click();
+    await page.waitForFunction(() =>
+      document
+        .querySelector(".srt-content")
+        .value.startsWith("1\n00:00:00,000"),
+    );
+    await page
+      .getByRole("button", { name: "Xử lý mốc SRT chồng lấn", exact: true })
+      .click();
+    await page.waitForFunction(() =>
+      document
+        .querySelector(".srt-content")
+        .value.includes("00:00:01,500 --> 00:00:02,000"),
+    );
+    await page
+      .getByLabel("Thời lượng câu tối thiểu (s)", { exact: true })
+      .fill("2");
+    await page
+      .getByRole("button", { name: "Giãn câu SRT quá ngắn", exact: true })
+      .click();
+    await page.waitForFunction(() =>
+      document
+        .querySelector(".srt-content")
+        .value.includes("00:00:02,000 --> 00:00:04,000"),
+    );
+    await page
+      .getByRole("button", { name: "Chuẩn hóa khoảng trắng SRT", exact: true })
+      .click();
+    await page
+      .getByLabel("Kiểu chữ SRT", { exact: true })
+      .selectOption("upper");
+    await page
+      .getByRole("button", { name: "Đổi kiểu chữ SRT", exact: true })
+      .click();
+    await page.waitForFunction(() =>
+      document.querySelector(".srt-content").value.includes("XIN CHÀO"),
+    );
+    await page
+      .getByRole("button", { name: "Xem bảng timeline SRT", exact: true })
+      .click();
+    await page.waitForFunction(
+      () => document.querySelectorAll(".timeline-table tbody tr").length === 2,
+    );
+    await page.getByRole("button", { name: "Storyboard", exact: true }).click();
+    await workflow.locator("summary").click();
+    await board
+      .getByText("Chọn nhiều cảnh & thời lượng theo lời", { exact: true })
+      .click();
+    console.log(
+      "PASS v0.9 browser: checkpoint restore/compare/rename/export, preset save/apply/rename/import/export/delete, summary/preflight, scene multi-select/batch/export/reading timing/shuffle, 6 SRT tools, real dual-aspect renders/repeat, queue stats/search",
+    );
     await page.evaluate(() => scrollTo(0, 0));
     await page.screenshot({
       path: path.join(root, "test-results/imported.png"),

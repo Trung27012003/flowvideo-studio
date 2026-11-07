@@ -6,7 +6,7 @@ Studio video cá nhân bằng **Angular 21 + ASP.NET Core / .NET 10 + FFmpeg**. 
 
 ![Giao diện FlowVideo Studio](docs/studio-preview.png)
 
-## Trạng thái v0.8
+## Trạng thái v0.9
 
 **Đã triển khai:** tạo/chọn dự án; nhập ảnh, video, audio, SRT; chọn và sắp xếp cảnh; cắt điểm vào/ra từng clip; ghép ảnh/video; loop trực tiếp một nguồn; thêm giọng đọc từ file và nhạc nền; burn-in SRT; hàng đợi, hủy job đang chờ/đang chạy, thử lại job lỗi; preview/tải MP4; tạo kịch bản, giọng đọc AI và phụ đề từ lời nói khi cấu hình API key; chỉnh sửa/lưu SRT không cần AI; lưu kịch bản và storyboard theo dự án; dựng theo thời lượng từng cảnh và tạo phụ đề từ lời cảnh; tạo ảnh AI theo prompt từng cảnh với hàng đợi, lịch sử và giới hạn lượt.
 
@@ -32,6 +32,12 @@ Tạo dự án → nhập media → chọn cảnh theo thứ tự → chỉnh đ
 Đặt biến môi trường `OPENAI_API_KEY` trong terminal chạy backend; `OPENAI_MODEL` mặc định `gpt-4o-mini`. Không đặt key trong Angular hay commit vào Git. File `.env.example` chỉ là mẫu; ứng dụng **không tự đọc `.env`**. Tạo kịch bản, giọng đọc và nhận diện phụ đề đều có thể phát sinh phí. `OPENAI_TTS_MODEL` mặc định `gpt-4o-mini-tts`; STT dùng `whisper-1` để lấy mốc thời gian. Cần model được tài khoản cho phép sử dụng.
 
 Bấm **Lưu kịch bản** để giữ nội dung theo dự án. Có thể chia các đoạn thành cảnh, chọn tư liệu và dựng bằng storyboard; Ảnh có thể tạo riêng bằng nút AI cho từng cảnh; chưa tự tạo toàn bộ tư liệu cho cả kịch bản.
+
+## Đợt 30 chức năng v0.9
+
+Thêm **mốc khôi phục và preset cá nhân lưu SQLite**: lưu/mở/so sánh/đổi tên/xóa/xuất mốc, lưu/áp/đổi tên/xóa và mang preset qua JSON. Có tổng quan dữ liệu và kiểm tra trước khi dựng, chọn nhiều cảnh, nhân bản/xóa/di chuyển/xuất nhóm, trộn thứ tự và căn thời lượng theo lời. Thêm 6 công cụ timeline SRT, dựng hai tỉ lệ dọc/ngang một lượt, dựng lại snapshot job hoàn tất, thống kê và tìm tác vụ.
+
+Danh sách đủ **30 mục**, hướng dẫn và giới hạn: [BATCH-V09.md](docs/BATCH-V09.md). Upgrade bổ sung bảng `SavedWorkspaceItems`, không viết lại dữ liệu cũ; tối đa 20 mốc và 20 preset/dự án. Không cần API key.
 
 ## Đợt 30 chức năng v0.8
 

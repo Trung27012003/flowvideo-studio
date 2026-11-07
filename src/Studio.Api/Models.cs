@@ -58,6 +58,7 @@ public record ScriptRequest(string Idea);
 
 public class StudioDb(DbContextOptions<StudioDb> options) : DbContext(options)
 {
+    public DbSet<SavedWorkspaceItem> SavedWorkspaceItems => Set<SavedWorkspaceItem>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<Asset> Assets => Set<Asset>();
     public DbSet<RenderJob> Jobs => Set<RenderJob>();
@@ -66,6 +67,8 @@ public class StudioDb(DbContextOptions<StudioDb> options) : DbContext(options)
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<SavedWorkspaceItem>().HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId);
+        b.Entity<SavedWorkspaceItem>().HasIndex(x => new { x.ProjectId, x.Kind });
         b.Entity<ImageGeneration>().HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId);
         b.Entity<ImageGeneration>().HasIndex(x => new { x.ProjectId, x.CreatedAt });
         b.Entity<ImageGeneration>().HasIndex(x => new { x.Status, x.CreatedAt });

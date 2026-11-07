@@ -734,3 +734,60 @@ dd {
   border: 1px solid #334155;
   border-radius: 10px;
 }
+
+.saved-workflow {
+  margin-bottom: 22px;
+}
+.saved-workflow summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+.saved-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 14px 0;
+  border-bottom: 1px solid #334155;
+}
+.saved-row button,
+.saved-row a {
+  font-size: 11px;
+}
+.saved-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  min-width: 0;
+}
+.saved-row input {
+  max-width: 100%;
+}
+.queue-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 18px 0;
+  font-size: 12px;
+  color: #91a3ba;
+}
+.timeline-table {
+  max-height: 400px;
+  overflow: auto;
+  font-size: 12px;
+  margin: 16px 0;
+}
+.timeline-table table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.timeline-table th,
+.timeline-table td {
+  padding: 10px;
+  border: 1px solid #334155;
+  text-align: left;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
