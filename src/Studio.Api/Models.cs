@@ -35,8 +35,11 @@ public record RenderRequest(
     Guid? VoiceId = null,
     Guid? MusicId = null,
     Guid? SubtitleId = null,
-    string Ratio = "9:16"
+    string Ratio = "9:16",
+    ClipTrim[]? Cuts = null
 );
+
+public record ClipTrim(Guid AssetId, double Start = 0, double? End = null);
 
 public record NameRequest(string Name);
 

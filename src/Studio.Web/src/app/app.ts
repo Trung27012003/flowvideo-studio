@@ -45,23 +45,52 @@ export class App implements OnInit, OnDestroy {
   subtitleId = '';
   idea = '';
   script = signal('');
+  cuts = signal<Record<string, { start: number; end: number | null }>>({});
+  syncError = signal(false);
+  private destroyed = false;
+  private requestVersion = 0;
+  private projectVersion = 0;
+  private controller = new AbortController();
   private timer?: ReturnType<typeof setInterval>;
   async ngOnInit() {
     await this.perform(async () => {
-      this.projects.set(await this.api('/projects'));
-      const c = await this.api('/capabilities');
-      this.aiEnabled.set(c.scriptAi);
+      const [projects, capabilities] = await Promise.all([
+        this.api('/projects'),
+        this.api('/capabilities'),
+      ]);
+      this.projects.set(projects);
+      this.aiEnabled.set(capabilities.scriptAi);
       if (this.projects().length) await this.selectProject(this.projects()[0].id);
     });
-    this.timer = setInterval(() => {
-      if (this.projectId()) void this.refreshJobs().catch(() => {});
-    }, 2500);
+    this.schedulePoll();
+  }
+  private schedulePoll() {
+    clearTimeout(this.timer);
+    if (this.destroyed) return;
+    const active = this.jobs().some((j) => j.status === 'Queued' || j.status === 'Running');
+    const delay = this.syncError() ? 30000 : active ? 2500 : 15000;
+    this.timer = setTimeout(async () => {
+      if (!document.hidden && this.projectId()) {
+        try {
+          await this.refreshJobs();
+          this.syncError.set(false);
+        } catch {
+          if (!this.destroyed) this.syncError.set(true);
+        }
+      }
+      this.schedulePoll();
+    }, delay);
   }
   ngOnDestroy() {
-    clearInterval(this.timer);
+    this.destroyed = true;
+    clearTimeout(this.timer);
+    this.controller.abort();
   }
   async api(path: string, init?: RequestInit): Promise<any> {
-    const r = await fetch('/api' + path, init);
+    const r = await fetch('/api' + path, {
+      ...init,
+      signal: AbortSignal.any([this.controller.signal, AbortSignal.timeout(120000)]),
+    });
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
       throw new Error(body.error || body.detail || 'Yêu cầu thất bại (' + r.status + ').');
@@ -69,6 +98,7 @@ export class App implements OnInit, OnDestroy {
     return r.json();
   }
   async perform(fn: () => Promise<void>) {
+    if (this.busy() || this.destroyed) return;
     this.busy.set(true);
     this.error.set('');
     this.notice.set('');
@@ -93,22 +123,45 @@ export class App implements OnInit, OnDestroy {
     });
   }
   async selectProject(id: string) {
+    const version = ++this.projectVersion;
     this.projectId.set(id);
+    this.assets.set([]);
+    this.jobs.set([]);
     this.selected.set([]);
+    this.cuts.set({});
     this.preview.set('');
     this.voiceId = '';
     this.musicId = '';
     this.subtitleId = '';
-    this.assets.set(await this.api('/projects/' + id + '/assets'));
-    await this.refreshJobs();
+    await Promise.all([
+      this.api('/projects/' + id + '/assets').then((assets) => {
+        if (version === this.projectVersion && !this.destroyed) this.assets.set(assets);
+      }),
+      this.refreshJobs(),
+    ]);
+    this.schedulePoll();
   }
   async switchProject(id: string) {
     await this.perform(() => this.selectProject(id));
   }
   async refreshJobs() {
     const id = this.projectId();
+    const version = ++this.requestVersion;
     const jobs = await this.api('/projects/' + id + '/jobs');
-    if (id === this.projectId()) this.jobs.set(jobs);
+    if (id === this.projectId() && version === this.requestVersion && !this.destroyed)
+      this.jobs.set(jobs);
+  }
+  setCut(id: string, field: 'start' | 'end', value: number | null) {
+    this.cuts.update((cuts) => ({
+      ...cuts,
+      [id]: {
+        ...(cuts[id] || { start: 0, end: null }),
+        [field]: field === 'start' ? (value ?? 0) : value,
+      },
+    }));
+  }
+  isVideo(id: string) {
+    return this.assets().some((a) => a.id === id && a.kind === 'video');
   }
   async upload(event: Event) {
     const input = event.target as HTMLInputElement;
@@ -149,6 +202,9 @@ export class App implements OnInit, OnDestroy {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           assetIds: this.selected(),
+          cuts: this.selected()
+            .filter((id) => this.isVideo(id) && this.cuts()[id])
+            .map((id) => ({ assetId: id, ...this.cuts()[id] })),
           mode: this.mode,
           duration: this.duration,
           ratio: this.ratio,
@@ -158,6 +214,7 @@ export class App implements OnInit, OnDestroy {
         }),
       });
       await this.refreshJobs();
+      this.schedulePoll();
       this.notice.set('Đã thêm vào hàng đợi. Bạn có thể theo dõi ở bên dưới.');
     });
   }
@@ -165,6 +222,14 @@ export class App implements OnInit, OnDestroy {
     await this.perform(async () => {
       await this.api('/jobs/' + id + '/retry', { method: 'POST' });
       await this.refreshJobs();
+      this.schedulePoll();
+    });
+  }
+  async cancel(id: string) {
+    await this.perform(async () => {
+      await this.api('/jobs/' + id + '/cancel', { method: 'POST' });
+      await this.refreshJobs();
+      this.schedulePoll();
     });
   }
   async generateScript() {
@@ -185,6 +250,7 @@ export class App implements OnInit, OnDestroy {
           Running: 'Đang xử lý',
           Succeeded: 'Hoàn tất',
           Failed: 'Lỗi',
+          Cancelled: 'Đã hủy',
         } as Record<string, string>
       )[s] || s
     );

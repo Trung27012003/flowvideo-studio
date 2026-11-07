@@ -12,6 +12,14 @@ def upload(project,path):
     body=(f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{path.name}"\r\nContent-Type: application/octet-stream\r\n\r\n').encode()+path.read_bytes()+f'\r\n--{boundary}--\r\n'.encode()
     req=urllib.request.Request(BASE+f'/projects/{project}/assets',data=body,headers={'Content-Type':f'multipart/form-data; boundary={boundary}'})
     with urllib.request.urlopen(req) as response:return json.load(response)
+def post(path):
+    req=urllib.request.Request(BASE+path,data=b'',method='POST')
+    with urllib.request.urlopen(req,timeout=20) as response:return json.load(response)
+def expect_status(path,code,payload=None,method=None):
+    data=json.dumps(payload).encode() if payload is not None else b'' if method=='POST' else None
+    req=urllib.request.Request(BASE+path,data=data,method=method,headers={'Content-Type':'application/json'} if payload is not None else {})
+    try:urllib.request.urlopen(req,timeout=20);raise AssertionError(f'Expected {code}: {path}')
+    except urllib.error.HTTPError as e:assert e.code==code,(e.code,code)
 def ffmpeg(*args):subprocess.run(['ffmpeg','-y','-hide_banner','-loglevel','error',*args],check=True)
 def start(data,log):
     env=dict(os.environ,STUDIO_DATA=str(data),OPENAI_API_KEY='')
@@ -52,6 +60,48 @@ with tempfile.TemporaryDirectory(prefix='flowvideo-smoke-') as folder:
                 assert (video['width'],video['height'])==(1280,720)
                 assert any(s['codec_type']=='audio' for s in info['streams'])==audio
                 print(f'PASS {mode}: {len(ids)} source(s), {actual}s, audio={audio}')
+            # Trim must select the requested content, not just shorten the output.
+            ffmpeg('-f','lavfi','-i','color=c=red:s=320x240:d=1','-f','lavfi','-i','color=c=blue:s=320x240:d=1','-filter_complex','[0:v][1:v]concat=n=2:v=1:a=0[v]','-map','[v]','-c:v','libx264','-pix_fmt','yuv420p',str(folder/'colors.mp4'))
+            colors=upload(p,folder/'colors.mp4')['id']
+            job=request(f'/projects/{p}/renders',{'assetIds':[colors],'duration':2,'ratio':'9:16','cuts':[{'assetId':colors,'start':1,'end':2}]})
+            wait_job(p,job)
+            trimmed=folder/'trimmed.mp4';urllib.request.urlretrieve(BASE+f'/jobs/{job["id"]}/download',trimmed)
+            assert abs(float(probe(trimmed)['format']['duration'])-1)<.15
+            pixel=subprocess.check_output(['ffmpeg','-hide_banner','-loglevel','error','-i',str(trimmed),'-vf','crop=2:2:(iw-2)/2:(ih-2)/2,scale=1:1','-frames:v','1','-f','rawvideo','-pix_fmt','rgb24','pipe:1'])
+            assert pixel[2]>180 and pixel[0]<60,tuple(pixel)
+            print('PASS trim start/end: correct blue scene and vertical output')
+            for cut in [{'assetId':colors,'start':-1},{'assetId':colors,'start':1,'end':.5},{'assetId':voice,'start':0},None]:
+                expect_status(f'/projects/{p}/renders',400,{'assetIds':[colors],'cuts':[cut]})
+            # Rendering stops at the duration budget, without processing unused sources.
+            (folder/'unused.mp4').write_text('invalid media')
+            unused=upload(p,folder/'unused.mp4')['id']
+            job=request(f'/projects/{p}/renders',{'assetIds':[clip,unused],'duration':1})
+            wait_job(p,job)
+            expect_status(f'/jobs/{job["id"]}/cancel',409,method='POST')
+            # Hold the worker with a long subtitle encode, cancel a queued job,
+            # then cancel the running process and verify the next job can finish.
+            blocker=request(f'/projects/{p}/renders',{'assetIds':[clip],'mode':'loop','duration':600,'subtitleId':sub})
+            for _ in range(100):
+                current=next(j for j in request(f'/projects/{p}/jobs') if j['id']==blocker['id'])
+                if current['status']=='Running':break
+                time.sleep(.1)
+            assert current['status']=='Running'
+            queued=request(f'/projects/{p}/renders',{'assetIds':[clip],'duration':1})
+            assert post(f'/jobs/{queued["id"]}/cancel')['status']=='Cancelled'
+            assert post(f'/jobs/{queued["id"]}/cancel')['status']=='Cancelled'
+            # Allow FFmpeg to start before cancellation.
+            time.sleep(.3)
+            assert post(f'/jobs/{blocker["id"]}/cancel')['status']=='Cancelled'
+            follower=request(f'/projects/{p}/renders',{'assetIds':[clip],'duration':1})
+            wait_job(p,follower)
+            states={j['id']:j['status'] for j in request(f'/projects/{p}/jobs')}
+            assert states[queued['id']]==states[blocker['id']]=='Cancelled'
+            for cancelled in [queued,blocker]:
+                expect_status(f'/jobs/{cancelled["id"]}/download',404)
+                assert not (folder/'data'/'exports'/(cancelled['id']+'.mp4')).exists()
+                assert not (folder/'data'/'temp'/cancelled['id'].replace('-','')).exists()
+            assert all('requestJson' not in j for j in request(f'/projects/{p}/jobs'))
+            print('PASS early duration cutoff, queued/running cancellation, process cleanup and queue recovery')
             for body in [{'assetIds':[voice]},{'assetIds':[clip],'duration':0},{'assetIds':[clip,clip],'mode':'loop'}]:
                 try:request(f'/projects/{p}/renders',body);raise AssertionError('Invalid request accepted')
                 except urllib.error.HTTPError as e:assert e.code==400
@@ -71,9 +121,10 @@ with tempfile.TemporaryDirectory(prefix='flowvideo-smoke-') as folder:
             assert state['status']=='Failed'
             retry=urllib.request.Request(BASE+f'/jobs/{bad["id"]}/retry',data=b'',method='POST')
             with urllib.request.urlopen(retry) as res:assert json.load(res)['status']=='Queued'
+            job_count=len(request(f'/projects/{p}/jobs'))
             proc.terminate();proc.wait(timeout=15);proc=start(folder/'data',log)
             assert len(request('/projects'))==2
-            assert len(request(f'/projects/{p}/jobs'))==4
+            assert len(request(f'/projects/{p}/jobs'))==job_count
             print('PASS validation, project isolation, missing AI key, failure/retry and restart persistence')
         except Exception:
             log.flush();log.seek(0);print(log.read()[-10000:]);raise

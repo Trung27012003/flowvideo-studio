@@ -38,7 +38,7 @@
         ></span
       >
       <div class="header-right">
-        <span class="pill">MVP v0.1</span
+        <span class="pill">MVP v0.2</span
         ><select
           aria-label="Chọn dự án"
           [ngModel]="projectId()"
@@ -76,6 +76,11 @@
       </form>
       @if (error()) {
         <div class="alert error" role="alert">{{ error() }}</div>
+      }
+      @if (syncError()) {
+        <div class="alert error" role="status">
+          Tạm mất kết nối hàng đợi. Đang tự thử kết nối lại.
+        </div>
       }
       @if (notice()) {
         <div class="alert" role="status">{{ notice() }}</div>
@@ -182,12 +187,29 @@
                   <h3>Thứ tự xuất</h3>
                   @for (id of selected(); track id; let i = $index) {
                     <div>
-                      <span>{{ i + 1 }}. {{ name(id) }}</span
-                      ><button
-                        (click)="move(id, -1)"
-                        [disabled]="i === 0"
-                        aria-label="Đưa cảnh lên"
-                      >
+                      <span>{{ i + 1 }}. {{ name(id) }}</span>
+                      @if (isVideo(id)) {
+                        <label class="trim-field"
+                          >Vào (s)<input
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            [ngModel]="cuts()[id]?.start ?? 0"
+                            (ngModelChange)="setCut(id, 'start', $event)"
+                            [attr.aria-label]="'Điểm vào ' + name(id)"
+                        /></label>
+                        <label class="trim-field"
+                          >Ra (s)<input
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            placeholder="Hết clip"
+                            [ngModel]="cuts()[id]?.end ?? null"
+                            (ngModelChange)="setCut(id, 'end', $event)"
+                            [attr.aria-label]="'Điểm ra ' + name(id)"
+                        /></label>
+                      }
+                      <button (click)="move(id, -1)" [disabled]="i === 0" aria-label="Đưa cảnh lên">
                         ↑</button
                       ><button
                         (click)="move(id, 1)"
@@ -205,7 +227,7 @@
           <section class="panel queue">
             <div class="panel-title">
               <h2>Hàng đợi render</h2>
-              <span>Tự cập nhật mỗi 2,5 giây</span>
+              <span>100 tác vụ gần nhất · tự cập nhật</span>
             </div>
             @for (j of jobs(); track j.id) {
               <div class="job">
@@ -226,6 +248,9 @@
                   >
                     Xem</button
                   ><a class="download" [href]="'/api/jobs/' + j.id + '/download'">Tải MP4 ↓</a>
+                }
+                @if (j.status === 'Queued' || j.status === 'Running') {
+                  <button class="secondary" (click)="cancel(j.id)" [disabled]="busy()">Hủy</button>
                 }
                 @if (j.status === 'Failed') {
                   <button class="secondary" (click)="retry(j.id)" [disabled]="busy()">
@@ -337,10 +362,10 @@
       }
       @if (tab() === 'roadmap') {
         <section class="panel roadmap">
-          <h2>Đã hoạt động trong v0.1</h2>
+          <h2>Đã hoạt động trong v0.2</h2>
           <p>
-            Quản lý dự án và media, ghép ảnh/video, loop trực tiếp, audio từ file, phụ đề SRT, hàng
-            đợi lưu SQLite và tải MP4. Viết kịch bản AI khi có API key.
+            Quản lý dự án và media, cắt điểm vào/ra từng clip, ghép ảnh/video, loop trực tiếp, audio
+            từ file, phụ đề SRT, hàng đợi lưu SQLite và tải MP4. Viết kịch bản AI khi có API key.
           </p>
           <h2>Giai đoạn tiếp theo</h2>
           <p>1. Tạo giọng đọc và nhận diện phụ đề qua API.</p>

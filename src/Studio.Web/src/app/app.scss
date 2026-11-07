@@ -529,3 +529,19 @@ footer span {
     display: none;
   }
 }
+
+.sequence > div {
+  flex-wrap: wrap;
+}
+.trim-field {
+  font-size: 9px;
+  color: #91a3ba;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.trim-field input {
+  width: 86px;
+  padding: 6px;
+  font-size: 11px;
+}

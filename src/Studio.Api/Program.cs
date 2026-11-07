@@ -14,6 +14,7 @@ builder.Services.AddDbContext<StudioDb>(
 builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = 262144000);
 builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 262144000);
 builder.Services.AddHttpClient();
+builder.Services.AddSingleton<JobControl>();
 builder.Services.AddHostedService<RenderWorker>();
 var app = builder.Build();
 using (var scope = app.Services.CreateScope())
@@ -29,7 +30,7 @@ using (var scope = app.Services.CreateScope())
 }
 app.UseDefaultFiles();
 app.UseStaticFiles();
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.1.0" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.2.0" }));
 app.MapGet(
     "/api/capabilities",
     (IConfiguration c) =>
@@ -42,7 +43,8 @@ app.MapGet(
 );
 app.MapGet(
     "/api/projects",
-    async (StudioDb db) => await db.Projects.OrderByDescending(x => x.CreatedAt).ToListAsync()
+    async (StudioDb db) =>
+        await db.Projects.AsNoTracking().OrderByDescending(x => x.CreatedAt).ToListAsync()
 );
 app.MapPost(
     "/api/projects",
@@ -58,7 +60,8 @@ app.MapPost(
 );
 app.MapGet(
     "/api/projects/{id:guid}/assets",
-    async (Guid id, StudioDb db) => await db.Assets.Where(x => x.ProjectId == id).ToListAsync()
+    async (Guid id, StudioDb db) =>
+        await db.Assets.AsNoTracking().Where(x => x.ProjectId == id).ToListAsync()
 );
 app.MapPost(
     "/api/projects/{id:guid}/assets",
@@ -90,10 +93,20 @@ app.MapPost(
             Kind = kind,
             StoredName = Guid.NewGuid().ToString("N") + ext,
         };
-        await using (var stream = File.Create(store.AssetPath(asset)))
-            await file.CopyToAsync(stream, ct);
-        db.Assets.Add(asset);
-        await db.SaveChangesAsync(ct);
+        var committed = false;
+        try
+        {
+            await using (var stream = File.Create(store.AssetPath(asset)))
+                await file.CopyToAsync(stream, ct);
+            db.Assets.Add(asset);
+            await db.SaveChangesAsync(ct);
+            committed = true;
+        }
+        finally
+        {
+            if (!committed)
+                File.Delete(store.AssetPath(asset));
+        }
         return Results.Ok(asset);
     }
 );
@@ -102,7 +115,7 @@ app.MapGet(
     async (Guid id, StudioDb db, Storage s) =>
     {
         var a = await db.Assets.FindAsync(id);
-        if (a is null)
+        if (a is null || !File.Exists(s.AssetPath(a)))
             return Results.NotFound();
         var mime = Path.GetExtension(a.StoredName).ToLowerInvariant() switch
         {
@@ -125,8 +138,18 @@ app.MapGet(
     "/api/projects/{id:guid}/jobs",
     async (Guid id, StudioDb db) =>
         await db
-            .Jobs.Where(x => x.ProjectId == id)
+            .Jobs.AsNoTracking()
+            .Where(x => x.ProjectId == id)
             .OrderByDescending(x => x.CreatedAt)
+            .Take(100)
+            .Select(x => new
+            {
+                x.Id,
+                x.ProjectId,
+                x.Status,
+                x.Message,
+                x.CreatedAt,
+            })
             .ToListAsync()
 );
 app.MapPost(
@@ -147,7 +170,14 @@ app.MapPost(
             );
         if (req.Mode == "loop" && req.AssetIds.Length != 1)
             return Results.BadRequest(new { error = "Chế độ loop cần đúng một ảnh hoặc video." });
-        var assets = await db.Assets.Where(x => x.ProjectId == id).ToListAsync();
+        var referenced = req
+            .AssetIds.Concat(new[] { req.VoiceId, req.MusicId, req.SubtitleId }.OfType<Guid>())
+            .Distinct()
+            .ToArray();
+        var assets = await db
+            .Assets.AsNoTracking()
+            .Where(x => x.ProjectId == id && referenced.Contains(x.Id))
+            .ToListAsync();
         if (
             req.AssetIds.Any(a =>
                 !assets.Any(x => x.Id == a && (x.Kind == "video" || x.Kind == "image"))
@@ -159,6 +189,25 @@ app.MapPost(
             return Results.BadRequest(
                 new { error = "Tài nguyên không hợp lệ hoặc không thuộc dự án." }
             );
+        var cuts = req.Cuts ?? [];
+        if (
+            cuts.Length > 30
+            || cuts.Any(x => x is null)
+            || cuts.Select(x => x.AssetId).Distinct().Count() != cuts.Length
+            || cuts.Any(x =>
+                !req.AssetIds.Contains(x.AssetId)
+                || !assets.Any(a => a.Id == x.AssetId && a.Kind == "video")
+                || !double.IsFinite(x.Start)
+                || x.Start < 0
+                || (x.End is double end && (!double.IsFinite(end) || end <= x.Start))
+            )
+        )
+            return Results.BadRequest(
+                new
+                {
+                    error = "Điểm cắt không hợp lệ. Chỉ cắt video; điểm ra phải lớn hơn điểm vào.",
+                }
+            );
         var job = new RenderJob { ProjectId = id, RequestJson = JsonSerializer.Serialize(req) };
         db.Jobs.Add(job);
         await db.SaveChangesAsync();
@@ -169,15 +218,61 @@ app.MapPost(
     "/api/jobs/{id:guid}/retry",
     async (Guid id, StudioDb db) =>
     {
-        var j = await db.Jobs.FindAsync(id);
-        if (j is null)
-            return Results.NotFound();
-        if (j.Status != "Failed")
+        var changed = await db
+            .Jobs.Where(x => x.Id == id && x.Status == "Failed")
+            .ExecuteUpdateAsync(s =>
+                s.SetProperty(x => x.Status, "Queued")
+                    .SetProperty(x => x.Message, "Đang chờ thử lại")
+            );
+        if (changed == 0)
+        {
+            if (!await db.Jobs.AnyAsync(x => x.Id == id))
+                return Results.NotFound();
             return Results.Conflict(new { error = "Chỉ thử lại job lỗi." });
-        j.Status = "Queued";
-        j.Message = "Đang chờ thử lại";
-        await db.SaveChangesAsync();
-        return Results.Ok(j);
+        }
+        return Results.Ok(
+            new
+            {
+                id,
+                status = "Queued",
+                message = "Đang chờ thử lại",
+            }
+        );
+    }
+);
+app.MapPost(
+    "/api/jobs/{id:guid}/cancel",
+    async (Guid id, StudioDb db, JobControl control, CancellationToken ct) =>
+    {
+        var changed = await db
+            .Jobs.Where(x => x.Id == id && (x.Status == "Queued" || x.Status == "Running"))
+            .ExecuteUpdateAsync(
+                s =>
+                    s.SetProperty(x => x.Status, "Cancelled")
+                        .SetProperty(x => x.Message, "Đã hủy tác vụ"),
+                ct
+            );
+        if (changed == 0)
+        {
+            var status = await db
+                .Jobs.AsNoTracking()
+                .Where(x => x.Id == id)
+                .Select(x => x.Status)
+                .FirstOrDefaultAsync(ct);
+            if (status is null)
+                return Results.NotFound();
+            if (status != "Cancelled")
+                return Results.Conflict(new { error = "Chỉ hủy tác vụ đang chờ hoặc đang chạy." });
+        }
+        control.Cancel(id);
+        return Results.Ok(
+            new
+            {
+                id,
+                status = "Cancelled",
+                message = "Đã hủy tác vụ",
+            }
+        );
     }
 );
 app.MapGet(
@@ -244,6 +339,17 @@ app.MapPost(
                         .GetString(),
                 }
             );
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return Results.Problem(
+                "Dịch vụ AI phản hồi quá chậm. Chưa tự động gửi lại yêu cầu.",
+                statusCode: 504
+            );
+        }
+        catch (JsonException)
+        {
+            return Results.Problem("Dịch vụ AI trả dữ liệu không hợp lệ.", statusCode: 502);
         }
         catch (HttpRequestException)
         {

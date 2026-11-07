@@ -23,6 +23,18 @@ jobs:
       - run: npm ci && npm run build
         working-directory: src/Studio.Web
       - run: python3 scripts/smoke.py
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+        working-directory: src/Studio.Web
+      - name: Browser smoke test
+        run: npm run test:e2e
+        working-directory: src/Studio.Web
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-screenshots
+          path: test-results/
+          if-no-files-found: ignore
       - name: Assemble runnable artifact
         run: |
           dotnet publish src/Studio.Api -c Release -o publish

@@ -1,6 +1,6 @@
-# Kiến trúc v0.1
+# Kiến trúc v0.2
 
-Angular → HTTP API ASP.NET Core → EF Core SQLite; BackgroundService đọc job queued và gọi FFmpeg. Browser polling trạng thái mỗi 2,5 giây. File dùng ID sinh bởi server, không dùng tên upload làm đường dẫn. FFmpeg arguments được truyền bằng ArgumentList, không qua shell.
+Angular → HTTP API ASP.NET Core → EF Core SQLite; BackgroundService đọc job queued và gọi FFmpeg. Browser polling theo tải: 2,5 giây khi active, 15 giây khi idle, 30 giây khi lỗi; không gửi khi tab ẩn. Mỗi vòng đợi request hoàn tất trước khi hẹn lần sau; version guard tránh phản hồi cũ ghi đè dự án mới. File dùng ID sinh bởi server, không dùng tên upload làm đường dẫn. FFmpeg arguments được truyền bằng ArgumentList, không qua shell.
 
 ## Dữ liệu
 
@@ -18,8 +18,14 @@ Lần chạy đầu dùng EnsureCreated. Khi thay đổi schema cần chuyển s
 
 ## Quyết định có chủ ý
 
-SQLite và hosted worker thay PostgreSQL/Hangfire để bản local ít dependency. Chưa cần Redis, Docker hay cloud storage. Worker chưa có pause/cancel từ UI. Polling thay SignalR trong bản đầu; có thể thay transport mà không đổi dữ liệu job. AI script dùng API thật, không retry tự động request tính phí.
+SQLite và hosted worker thay PostgreSQL/Hangfire để bản local ít dependency. Chưa cần Redis, Docker hay cloud storage. UI đã hỗ trợ cancel. Endpoint đổi trạng thái bằng update có điều kiện; JobControl liên kết CancellationToken với FFmpeg. Đăng ký token trước khi claim Queued → Running để tránh bỏ lỡ cancel. Hoàn tất cũng là update có điều kiện, nên job đã hủy không thể chuyển lại Succeeded. Chưa có pause. Polling thay SignalR trong bản đầu; có thể thay transport mà không đổi dữ liệu job. AI script dùng API thật, không retry tự động request tính phí.
 
 ## Nâng cấp
 
 Tách renderer/provider interface khi thêm provider thứ hai. Tạo Scene, TimelineRevision, ProviderRequest, UsageRecord; lưu model, request ID, tham số và nguồn gốc media. Dùng capability matrix cho từng provider. Thêm authentication trước multi-user; thêm migrations, PostgreSQL và cơ chế claim job nguyên tử trước nhiều worker.
+
+## Render tối ưu và trim
+
+Probe duration với ffprobe; chỉ chuẩn hóa phần clip trong điểm vào/ra và ngân sách còn lại. Tái sử dụng cảnh trùng trong cùng job. Loop chuẩn hóa một chu kỳ nguồn rồi stream_loop ở bước xuất. Dùng video stream copy khi không có phụ đề; burn-in vẫn cần encode. Giới hạn encoder ở hai thread, log tiến trình giữ tail hữu hạn. Xuất vào file tạm rồi move khi xong; job lỗi/hủy không để lại MP4 dở ở exports.
+
+Giữ nguyên schema SQLite hiện có. Cuts được lưu trong RequestJson, job cũ không có Cuts dùng toàn bộ nguồn như trước. API hàng đợi chỉ trả metadata 100 job gần nhất, không trả RequestJson; truy vấn media chỉ tải các asset được tham chiếu.

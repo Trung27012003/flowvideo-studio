@@ -6,11 +6,11 @@ Studio video cá nhân bằng **Angular 21 + ASP.NET Core / .NET 10 + FFmpeg**. 
 
 ![Giao diện FlowVideo Studio](docs/studio-preview.png)
 
-## Trạng thái v0.1
+## Trạng thái v0.2
 
-**Đã triển khai:** tạo/chọn dự án; nhập ảnh, video, audio, SRT; chọn và sắp xếp cảnh; ghép ảnh/video; loop trực tiếp một nguồn; thêm giọng đọc từ file và nhạc nền; burn-in SRT; hàng đợi, thử lại job lỗi; preview/tải MP4; tạo kịch bản AI khi cấu hình API key.
+**Đã triển khai:** tạo/chọn dự án; nhập ảnh, video, audio, SRT; chọn và sắp xếp cảnh; cắt điểm vào/ra từng clip; ghép ảnh/video; loop trực tiếp một nguồn; thêm giọng đọc từ file và nhạc nền; burn-in SRT; hàng đợi, hủy job đang chờ/đang chạy, thử lại job lỗi; preview/tải MP4; tạo kịch bản AI khi cấu hình API key.
 
-**Chưa triển khai:** sinh video/ảnh AI, text-to-speech, speech-to-text, timeline trim/split, loop crossfade/ping-pong, đăng mạng xã hội, tự động biến kịch bản thành video. Các chức năng này được mô tả trong [roadmap](docs/ROADMAP.md), không giả lập kết quả AI.
+**Chưa triển khai:** sinh video/ảnh AI, text-to-speech, speech-to-text, editor timeline nhiều track/split, loop crossfade/ping-pong, đăng mạng xã hội, tự động biến kịch bản thành video. Các chức năng này được mô tả trong [roadmap](docs/ROADMAP.md), không giả lập kết quả AI.
 
 ## Chạy phát triển
 
@@ -25,7 +25,7 @@ bash scripts/dev.sh
 
 Mở **http://127.0.0.1:4200**. API chạy tại `http://127.0.0.1:5080`. Angular proxy chuyển `/api` tới backend. Trên Windows, chạy hai lệnh trong hai terminal: `dotnet run --project src/Studio.Api --urls http://127.0.0.1:5080` và `npm start` trong `src/Studio.Web`.
 
-Tạo dự án → nhập media → chọn cảnh theo thứ tự → chọn audio/SRT nếu cần → **Tạo & chạy video**. Job cập nhật mỗi 2,5 giây. Khi hoàn tất, xem hoặc tải MP4.
+Tạo dự án → nhập media → chọn cảnh theo thứ tự → chỉnh điểm vào/ra từng clip nếu cần → chọn audio/SRT nếu cần → **Tạo & chạy video**. Hàng đợi tải 100 job gần nhất; tự cập nhật mỗi 2,5 giây khi có tác vụ đang xử lý, 15 giây khi rảnh và tạm ngừng khi tab bị ẩn. Khi hoàn tất, xem hoặc tải MP4.
 
 ## AI tùy chọn
 
@@ -36,6 +36,7 @@ Kịch bản AI hiện chỉ hiển thị trong phiên trình duyệt; hãy sao 
 ## Quy tắc render hiện tại
 
 - Ghép: ảnh 5 giây/cảnh; video giữ thời lượng nguồn trong giới hạn; đầu ra dừng ở thời lượng media hoặc giới hạn người dùng, tùy giá trị nhỏ hơn.
+- Cắt clip: nhập điểm vào/ra theo giây trong danh sách cảnh; để trống điểm ra để lấy đến cuối nguồn. Loop lặp phần đã cắt. Điểm vượt thời lượng nguồn sẽ khiến job báo lỗi.
 - Loop: chọn đúng một ảnh/video, lặp trực tiếp đến thời lượng đích; không bảo đảm điểm nối liền mạch.
 - Đầu ra: H.264/AAC MP4, 30 fps, 720×1280 hoặc 1280×720; giữ tỉ lệ nguồn bằng letterbox.
 - Audio gốc của clip bị bỏ. Giọng đọc là file audio đã nhập, không phải TTS. Nhạc nền giảm về 18%, chưa có auto-ducking.
@@ -58,7 +59,9 @@ cd ../..
 python3 scripts/smoke.py
 ```
 
-Smoke test chạy backend với database tạm, tạo media bằng FFmpeg, kiểm tra ghép, loop, audio + SRT, validation, tải MP4 và dữ liệu sau restart. Cần API port 5097 trống.
+Có thể kiểm tra giao diện bằng `npx playwright install chromium` rồi `npm run test:e2e` trong `src/Studio.Web` sau khi build cả frontend/backend. Linux có thể cần `npx playwright install --with-deps chromium`. Dùng biến `PLAYWRIGHT_CHROMIUM_EXECUTABLE` nếu muốn chỉ định Chromium đã cài.
+
+Smoke test chạy backend với database tạm, tạo media bằng FFmpeg, kiểm tra ghép, loop, audio + SRT, validation, tải MP4 và dữ liệu sau restart. Cần API port 5097 trống; browser test dùng port 5099.
 
 ## Chạy bản build chung một server
 
@@ -72,4 +75,4 @@ dotnet Studio.Api.dll --urls http://127.0.0.1:5080
 
 Trên Windows, copy nội dung thư mục `dist/web/browser` vào `publish/wwwroot` bằng Explorer/PowerShell. CI tạo artifact cùng cấu trúc; máy chạy artifact vẫn cần .NET 10 runtime, FFmpeg và font.
 
-Xem [kiến trúc](docs/ARCHITECTURE.md) và [kế hoạch](docs/ROADMAP.md). Repository trên GitHub lưu mã nguồn và CI; không phải dịch vụ web được hosting công khai.
+Xem [kết quả tối ưu](docs/PERFORMANCE.md), [kiến trúc](docs/ARCHITECTURE.md) và [kế hoạch](docs/ROADMAP.md). Repository trên GitHub lưu mã nguồn và CI; không phải dịch vụ web được hosting công khai.
