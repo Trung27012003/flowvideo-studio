@@ -6,11 +6,11 @@ Studio video cá nhân bằng **Angular 21 + ASP.NET Core / .NET 10 + FFmpeg**. 
 
 ![Giao diện FlowVideo Studio](docs/studio-preview.png)
 
-## Trạng thái v0.3
+## Trạng thái v0.4
 
-**Đã triển khai:** tạo/chọn dự án; nhập ảnh, video, audio, SRT; chọn và sắp xếp cảnh; cắt điểm vào/ra từng clip; ghép ảnh/video; loop trực tiếp một nguồn; thêm giọng đọc từ file và nhạc nền; burn-in SRT; hàng đợi, hủy job đang chờ/đang chạy, thử lại job lỗi; preview/tải MP4; tạo kịch bản, giọng đọc AI và phụ đề từ lời nói khi cấu hình API key; chỉnh sửa/lưu SRT không cần AI.
+**Đã triển khai:** tạo/chọn dự án; nhập ảnh, video, audio, SRT; chọn và sắp xếp cảnh; cắt điểm vào/ra từng clip; ghép ảnh/video; loop trực tiếp một nguồn; thêm giọng đọc từ file và nhạc nền; burn-in SRT; hàng đợi, hủy job đang chờ/đang chạy, thử lại job lỗi; preview/tải MP4; tạo kịch bản, giọng đọc AI và phụ đề từ lời nói khi cấu hình API key; chỉnh sửa/lưu SRT không cần AI; lưu kịch bản và storyboard theo dự án; dựng theo thời lượng từng cảnh và tạo phụ đề từ lời cảnh.
 
-**Chưa triển khai:** sinh video/ảnh AI, editor timeline nhiều track/split, loop crossfade/ping-pong, đăng mạng xã hội, tự động biến kịch bản thành video. Các chức năng này được mô tả trong [roadmap](docs/ROADMAP.md), không giả lập kết quả AI.
+**Chưa triển khai:** sinh video/ảnh AI, editor timeline nhiều track/split, loop crossfade/ping-pong, đăng mạng xã hội, tự động tạo toàn bộ tư liệu/giọng đọc từ ý tưởng. Các chức năng này được mô tả trong [roadmap](docs/ROADMAP.md), không giả lập kết quả AI.
 
 ## Chạy phát triển
 
@@ -31,7 +31,15 @@ Tạo dự án → nhập media → chọn cảnh theo thứ tự → chỉnh đ
 
 Đặt biến môi trường `OPENAI_API_KEY` trong terminal chạy backend; `OPENAI_MODEL` mặc định `gpt-4o-mini`. Không đặt key trong Angular hay commit vào Git. File `.env.example` chỉ là mẫu; ứng dụng **không tự đọc `.env`**. Tạo kịch bản, giọng đọc và nhận diện phụ đề đều có thể phát sinh phí. `OPENAI_TTS_MODEL` mặc định `gpt-4o-mini-tts`; STT dùng `whisper-1` để lấy mốc thời gian. Cần model được tài khoản cho phép sử dụng.
 
-Kịch bản AI hiện chỉ hiển thị trong phiên trình duyệt; hãy sao chép trước khi reload. Nó chưa tự tạo media hay đưa vào hàng đợi dựng.
+Bấm **Lưu kịch bản** để giữ nội dung theo dự án. Có thể chia các đoạn thành cảnh, chọn tư liệu và dựng bằng storyboard; AI hiện chưa tự tạo media cho các cảnh.
+
+## Storyboard v0.4
+
+Chọn dự án → Kịch bản AI → nhập/tạo kịch bản → **Lưu kịch bản**. **Chia đoạn thành cảnh** thêm mỗi đoạn cách dòng trống thành một cảnh; có thể thêm cảnh thủ công trong Storyboard.
+
+Trong Storyboard, chọn ảnh/video, nhập thời lượng và điểm vào, sửa lời/ghi chú, sắp xếp cảnh, chọn giọng/nhạc rồi bấm **Lưu & dựng storyboard**. Mỗi job giữ cấu hình tại thời điểm tạo. Nội dung đã lưu mở lại theo dự án sau reload; nội dung chưa lưu có thể mất. Trình duyệt nhớ dự án được mở gần nhất khi localStorage khả dụng.
+
+Video ngắn hơn cảnh sẽ giữ khung hình cuối. Phụ đề từ lời cảnh hiển thị trong toàn cảnh, chưa căn theo giọng nói. Storyboard không cần key khi dùng tư liệu có sẵn. Tối đa 30 cảnh và tổng 600 giây. Xem [hướng dẫn storyboard](docs/STORYBOARD.md).
 
 ## Giọng đọc và phụ đề v0.3
 

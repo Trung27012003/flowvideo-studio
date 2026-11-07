@@ -1,5 +1,6 @@
 import { Component, OnDestroy, OnInit, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { StoryboardEditor, SceneDraft } from './storyboard';
 interface Project {
   id: string;
   name: string;
@@ -17,7 +18,7 @@ interface Job {
 }
 @Component({
   selector: 'app-root',
-  imports: [FormsModule],
+  imports: [FormsModule, StoryboardEditor],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -62,6 +63,13 @@ export class App implements OnInit, OnDestroy {
   subtitleId = '';
   idea = '';
   script = signal('');
+  scenes = signal<SceneDraft[]>([]);
+  documentVersion = signal(0);
+  documentLoaded = signal(false);
+  boardRatio = signal('9:16');
+  boardVoice = signal('');
+  boardMusic = signal('');
+  boardCaptions = signal(true);
   cuts = signal<Record<string, { start: number; end: number | null }>>({});
   syncError = signal(false);
   private destroyed = false;
@@ -80,7 +88,12 @@ export class App implements OnInit, OnDestroy {
       this.speechEnabled.set(capabilities.tts);
       this.transcriptionEnabled.set(capabilities.transcription);
       this.voices.set(capabilities.voices || []);
-      if (this.projects().length) await this.selectProject(this.projects()[0].id);
+      let preferred = '';
+      try {
+        preferred = localStorage.getItem('flowvideo.project') || '';
+      } catch {}
+      const project = this.projects().find((p) => p.id === preferred) || this.projects()[0];
+      if (project) await this.selectProject(project.id);
     });
     this.schedulePoll();
   }
@@ -145,6 +158,15 @@ export class App implements OnInit, OnDestroy {
   async selectProject(id: string) {
     const version = ++this.projectVersion;
     this.projectId.set(id);
+    this.idea = '';
+    this.script.set('');
+    this.scenes.set([]);
+    this.documentVersion.set(0);
+    this.documentLoaded.set(false);
+    this.boardRatio.set('9:16');
+    this.boardVoice.set('');
+    this.boardMusic.set('');
+    this.boardCaptions.set(true);
     this.assets.set([]);
     this.jobs.set([]);
     this.selected.set([]);
@@ -163,7 +185,23 @@ export class App implements OnInit, OnDestroy {
         if (version === this.projectVersion && !this.destroyed) this.assets.set(assets);
       }),
       this.refreshJobs(),
+      this.api('/projects/' + id + '/document').then((result) => {
+        if (version !== this.projectVersion || this.destroyed) return;
+        const doc = result.document;
+        this.idea = doc.idea;
+        this.script.set(doc.script);
+        this.scenes.set(doc.scenes || []);
+        this.boardRatio.set(doc.ratio);
+        this.boardVoice.set(doc.voiceId || '');
+        this.boardMusic.set(doc.musicId || '');
+        this.boardCaptions.set(doc.autoCaptions);
+        this.documentVersion.set(result.version);
+        this.documentLoaded.set(true);
+      }),
     ]);
+    try {
+      localStorage.setItem('flowvideo.project', id);
+    } catch {}
     this.schedulePoll();
   }
   async switchProject(id: string) {
@@ -324,6 +362,81 @@ export class App implements OnInit, OnDestroy {
       this.savedSubtitle.set(result.asset);
       this.subtitleContent = await this.subtitleFile(result.asset.id);
       this.notice.set('Đã lưu bản phụ đề mới và chọn trong Studio. Các bản trước vẫn được giữ.');
+    });
+  }
+  private async storeDocument() {
+    if (!this.documentLoaded())
+      throw new Error('Chưa tải xong dự án. Hãy tải lại trang trước khi lưu.');
+    const result = await this.api('/projects/' + this.projectId() + '/document', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        version: this.documentVersion(),
+        document: {
+          idea: this.idea,
+          script: this.script(),
+          scenes: this.scenes(),
+          ratio: this.boardRatio(),
+          voiceId: this.boardVoice() || null,
+          musicId: this.boardMusic() || null,
+          autoCaptions: this.boardCaptions(),
+        },
+      }),
+    });
+    this.documentVersion.set(result.version);
+    return result.version;
+  }
+  async saveDocument() {
+    await this.perform(async () => {
+      await this.storeDocument();
+      this.notice.set('Đã lưu kịch bản và storyboard vào dự án.');
+    });
+  }
+  splitScript() {
+    const paragraphs = this.script()
+      .trim()
+      .split(/\n\s*\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (paragraphs.length > 30 || paragraphs.some((p) => p.length > 2000)) {
+      this.error.set('Tối đa 30 đoạn, mỗi đoạn 2.000 ký tự. Hãy chia hoặc rút gọn trước.');
+      return;
+    }
+    if (this.scenes().length + paragraphs.length > 30) {
+      this.error.set('Thêm các đoạn này sẽ vượt quá 30 cảnh. Hãy bớt cảnh trước.');
+      return;
+    }
+    this.scenes.update((s) => [
+      ...s,
+      ...paragraphs.map((text, i) => ({
+        id: crypto.randomUUID(),
+        title: 'Cảnh ' + (s.length + i + 1),
+        narration: text,
+        prompt: '',
+        assetId: null,
+        duration: 5,
+        start: 0,
+      })),
+    ]);
+    this.tab.set('board');
+    this.notice.set(
+      'Đã thêm mỗi đoạn thành một cảnh. Chọn tư liệu, sửa lời và thời lượng rồi lưu.',
+    );
+  }
+  async renderStoryboard() {
+    await this.perform(async () => {
+      const version = await this.storeDocument();
+      await this.api('/projects/' + this.projectId() + '/storyboard/render', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version }),
+      });
+      await this.refreshJobs();
+      this.schedulePoll();
+      this.tab.set('studio');
+      this.notice.set(
+        'Đã lưu và đưa storyboard vào hàng đợi. Chỉnh sửa tiếp theo không thay đổi tác vụ này.',
+      );
     });
   }
   async generateScript() {

@@ -4,19 +4,42 @@
       >◈ <span>FlowVideo<small>PERSONAL AI STUDIO</small></span></a
     >
     <div class="nav-label">KHÔNG GIAN SÁNG TẠO</div>
-    <button [class.active]="tab() === 'studio'" (click)="tab.set('studio')">
+    <button
+      aria-label="Studio & render"
+      [class.active]="tab() === 'studio'"
+      (click)="tab.set('studio')"
+    >
       ▷ <span>Studio & render</span>
     </button>
-    <button [class.active]="tab() === 'library'" (click)="tab.set('library')">
+    <button
+      aria-label="Thư viện media"
+      [class.active]="tab() === 'library'"
+      (click)="tab.set('library')"
+    >
       ▦ <span>Thư viện media</span>
     </button>
-    <button [class.active]="tab() === 'script'" (click)="tab.set('script')">
+    <button
+      aria-label="Kịch bản AI"
+      [class.active]="tab() === 'script'"
+      (click)="tab.set('script')"
+    >
       ✧ <span>Kịch bản AI</span>
     </button>
-    <button [class.active]="tab() === 'voice'" (click)="tab.set('voice')">
+    <button aria-label="Storyboard" [class.active]="tab() === 'board'" (click)="tab.set('board')">
+      ▤ <span>Storyboard</span>
+    </button>
+    <button
+      aria-label="Giọng đọc & phụ đề"
+      [class.active]="tab() === 'voice'"
+      (click)="tab.set('voice')"
+    >
       ♫ <span>Giọng đọc & phụ đề</span>
     </button>
-    <button [class.active]="tab() === 'roadmap'" (click)="tab.set('roadmap')">
+    <button
+      aria-label="Lộ trình phát triển"
+      [class.active]="tab() === 'roadmap'"
+      (click)="tab.set('roadmap')"
+    >
       ☷ <span>Lộ trình phát triển</span>
     </button>
     <div class="local">
@@ -38,12 +61,14 @@
                   ? 'Kịch bản'
                   : tab() === 'voice'
                     ? 'Giọng đọc & phụ đề'
-                    : 'Lộ trình'
+                    : tab() === 'board'
+                      ? 'Storyboard'
+                      : 'Lộ trình'
           }}</b
         ></span
       >
       <div class="header-right">
-        <span class="pill">MVP v0.3</span
+        <span class="pill">MVP v0.4</span
         ><select
           aria-label="Chọn dự án"
           [ngModel]="projectId()"
@@ -68,7 +93,9 @@
                 ? 'Bắt đầu bằng một ý tưởng.'
                 : tab() === 'voice'
                   ? 'Thêm giọng nói cho câu chuyện.'
-                  : 'Từng bước hoàn thiện studio.'
+                  : tab() === 'board'
+                    ? 'Xây câu chuyện qua từng cảnh.'
+                    : 'Từng bước hoàn thiện studio.'
         }}
       </h1>
       <p class="intro">Studio cá nhân để ghép video, tạo loop, lồng âm thanh và thêm phụ đề.</p>
@@ -362,10 +389,45 @@
               aria-label="Kịch bản"
             ></textarea>
             <p class="hint">
-              Kịch bản hiện chỉ nằm trong phiên làm việc. Sao chép nội dung trước khi tải lại trang.
+              Lưu kịch bản để mở lại cùng dự án. Chia đoạn sẽ thêm mỗi đoạn cách dòng trống thành
+              một cảnh; kiểm tra lại lời trước khi dựng.
             </p>
+            <div class="subtitle-actions">
+              <button
+                class="secondary"
+                (click)="saveDocument()"
+                [disabled]="busy() || !projectId() || !documentLoaded()"
+              >
+                Lưu kịch bản
+              </button>
+              <button
+                class="primary"
+                (click)="splitScript()"
+                [disabled]="busy() || !projectId() || !documentLoaded() || !script().trim()"
+              >
+                Chia đoạn thành cảnh
+              </button>
+            </div>
           </section>
         </div>
+      }
+      @if (tab() === 'board') {
+        @if (projectId() && documentLoaded()) {
+          <app-storyboard
+            [(scenes)]="scenes"
+            [(ratio)]="boardRatio"
+            [(voiceId)]="boardVoice"
+            [(musicId)]="boardMusic"
+            [(autoCaptions)]="boardCaptions"
+            [assets]="assets()"
+            [disabled]="busy()"
+            [version]="documentVersion()"
+            (save)="saveDocument()"
+            (render)="renderStoryboard()"
+          />
+        } @else {
+          <section class="panel"><p>Chọn hoặc tạo dự án để bắt đầu storyboard.</p></section>
+        }
       }
       @if (tab() === 'voice') {
         @if (!projectId()) {
@@ -525,16 +587,16 @@
       }
       @if (tab() === 'roadmap') {
         <section class="panel roadmap">
-          <h2>Đã hoạt động trong v0.3</h2>
+          <h2>Đã hoạt động trong v0.4</h2>
           <p>
             Quản lý dự án và media, cắt điểm vào/ra từng clip, ghép ảnh/video, loop trực tiếp, audio
             từ file, phụ đề SRT, hàng đợi lưu SQLite và tải MP4. Viết kịch bản, tạo giọng đọc và
             nhận diện phụ đề AI khi có API key. Chỉnh sửa SRT không cần AI.
           </p>
           <h2>Giai đoạn tiếp theo</h2>
-          <p>1. Tự động dựng video từ kịch bản, giọng đọc và tư liệu.</p>
+          <p>1. Tạo tư liệu AI và giọng đọc tự động cho từng cảnh.</p>
           <p>2. Tạo ảnh/video AI từng cảnh, theo dõi request và ngân sách.</p>
-          <p>3. Storyboard lưu bền vững, timeline trim/split và preview proxy.</p>
+          <p>3. Timeline nhiều track, split và preview proxy.</p>
           <p>4. Loop crossfade/ping-pong và kiểm tra mối nối.</p>
           <p>5. Cắt video theo transcript và xuất nhiều phiên bản.</p>
           <p class="hint">

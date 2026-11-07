@@ -181,6 +181,95 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       path: path.join(root, "test-results/voice.png"),
       fullPage: true,
     });
+    await page.getByRole("button", { name: /Kịch bản AI/ }).click();
+    const scriptText = "Mở đầu câu chuyện.\n\nKết thúc câu chuyện.";
+    await page
+      .getByRole("textbox", { name: "Kịch bản", exact: true })
+      .fill(scriptText);
+    await page
+      .getByRole("button", { name: "Lưu kịch bản", exact: true })
+      .click();
+    await page
+      .getByRole("status")
+      .filter({ hasText: "Đã lưu kịch bản và storyboard" })
+      .waitFor();
+    await page.reload();
+    await page.getByRole("button", { name: /Kịch bản AI/ }).click();
+    await page.waitForFunction(() =>
+      document
+        .querySelector(".script-output")
+        ?.value.includes("Mở đầu câu chuyện."),
+    );
+    assert.equal(
+      await page
+        .getByRole("textbox", { name: "Kịch bản", exact: true })
+        .inputValue(),
+      scriptText,
+    );
+    await page.getByRole("button", { name: "Chia đoạn thành cảnh" }).click();
+    await page
+      .getByRole("combobox", { name: "Tư liệu của cảnh" })
+      .nth(0)
+      .selectOption({ label: "sample.mp4" });
+    await page
+      .getByRole("combobox", { name: "Tư liệu của cảnh" })
+      .nth(1)
+      .selectOption({ label: "sample.mp4" });
+    await page
+      .getByRole("spinbutton", { name: "Thời lượng cảnh (s)" })
+      .nth(0)
+      .fill("1");
+    await page
+      .getByRole("spinbutton", { name: "Thời lượng cảnh (s)" })
+      .nth(1)
+      .fill("2");
+    await page.getByRole("button", { name: "Lưu & dựng storyboard" }).click();
+    await page
+      .getByRole("status")
+      .filter({ hasText: "Đã lưu và đưa storyboard" })
+      .waitFor();
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll('a.download[href$="/download"]').length === 2,
+      { timeout: 60000 },
+    );
+    await page
+      .getByRole("button", { name: /Storyboard/, exact: false })
+      .click();
+    await page
+      .getByRole("button", { name: "Đưa cảnh storyboard xuống" })
+      .nth(0)
+      .click();
+    await page
+      .getByRole("button", { name: "Lưu storyboard", exact: true })
+      .click();
+    await page
+      .getByRole("status")
+      .filter({ hasText: "Đã lưu kịch bản và storyboard" })
+      .waitFor();
+    await page.reload();
+    await page.getByRole("button", { name: /Storyboard/ }).click();
+    await page.getByRole("textbox", { name: "Lời của cảnh" }).nth(0).waitFor();
+    assert.equal(
+      await page
+        .getByRole("textbox", { name: "Lời của cảnh" })
+        .nth(0)
+        .inputValue(),
+      "Kết thúc câu chuyện.",
+    );
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.screenshot({
+      path: path.join(root, "test-results/storyboard.png"),
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+      false,
+      "Storyboard mobile overflow",
+    );
     await page.getByRole("button", { name: /Studio & render/ }).click();
     await page.setViewportSize({ width: 390, height: 844 });
     assert.equal(
@@ -203,7 +292,7 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     });
     assert.deepEqual(errors, []);
     console.log(
-      "PASS browser: project, upload, trim, real export/preview, cancel, library, subtitle editor/download, AI capability, mobile layout; no JS errors",
+      "PASS browser: project, upload, trim, real export/preview, cancel, library, subtitle editor/download, AI capability, persistent script/storyboard, scene render, reorder, mobile layout; no JS errors",
     );
   } catch (error) {
     console.error(logs);

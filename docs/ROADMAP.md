@@ -24,6 +24,15 @@
 - [x] HTTP contract tests dùng provider mô phỏng; render thật với audio/sub đã tạo
 - [x] Browser test editor/download; không gọi API tính phí trong CI
 
+## V0.4 — storyboard đã bổ sung
+
+- [x] Lưu ý tưởng, kịch bản và cảnh theo dự án
+- [x] Chia đoạn thành cảnh, gắn tư liệu, sắp xếp và chỉnh thời lượng/điểm vào
+- [x] Phụ đề theo cảnh, giọng/nhạc chung, lưu và xếp hàng dựng
+- [x] Kiểm tra phiên bản để tránh ghi đè khi nhiều tab cùng sửa
+- [x] Cấu hình job không bị đổi bởi lần lưu storyboard tiếp theo
+- [x] Nâng cấp database cũ và kiểm thử reload/đảo cảnh trên trình duyệt
+
 ## Tiếp theo — chất lượng nền tảng (2–3 tuần)
 
 - ffprobe kiểm tra file ngay sau upload; duration, thumbnail, waveform
@@ -37,11 +46,11 @@
 - Alignment theo từng từ, editor dạng bảng và xuất ASS
 - Từ điển phát âm, auto-ducking và loudness normalization
 
-## V0.5 — storyboard và một nút bấm (3–4 tuần)
+## V0.5 — tự động hóa storyboard (3–4 tuần)
 
-- Script có cấu trúc, Scene, Asset provenance và TimelineRevision
+- AI chia cảnh có cấu trúc, provenance media và lịch sử bản lưu có thể khôi phục
 - Voice timing quyết định duration thực tế
-- Tự tạo video từ media có sẵn, trạng thái từng bước và resume
+- Tự tạo giọng/tư liệu cho từng cảnh, trạng thái từng bước và resume
 - Trần ngân sách; cache kết quả và invalidation khi sửa cảnh
 
 ## V0.6 — AI image/video (3–4 tuần)

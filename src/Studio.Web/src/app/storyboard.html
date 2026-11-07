@@ -1,0 +1,149 @@
+<section class="panel">
+  <div class="top">
+    <div>
+      <h2>Storyboard của dự án</h2>
+      <p>
+        {{ scenes().length }} cảnh · {{ total().toFixed(1) }} giây · bản đã lưu v{{ version() }}
+      </p>
+    </div>
+    <span class="hint">Nhớ lưu sau khi chỉnh sửa.</span>
+  </div>
+  <fieldset [disabled]="disabled()">
+    <div class="settings">
+      <label
+        >Tỉ lệ<select [ngModel]="ratio()" (ngModelChange)="ratio.set($event)">
+          <option value="9:16">9:16 · Dọc</option>
+          <option value="16:9">16:9 · Ngang</option>
+        </select></label
+      >
+      <label
+        >Giọng cho storyboard<select [ngModel]="voiceId()" (ngModelChange)="voiceId.set($event)">
+          <option value="">Không dùng</option>
+          @for (a of audio(); track a.id) {
+            <option [value]="a.id">{{ a.name }}</option>
+          }
+        </select></label
+      >
+      <label
+        >Nhạc cho storyboard<select [ngModel]="musicId()" (ngModelChange)="musicId.set($event)">
+          <option value="">Không dùng</option>
+          @for (a of audio(); track a.id) {
+            <option [value]="a.id">{{ a.name }}</option>
+          }
+        </select></label
+      >
+    </div>
+    <label class="checkbox"
+      ><input
+        type="checkbox"
+        [ngModel]="autoCaptions()"
+        (ngModelChange)="autoCaptions.set($event)"
+      />Tạo phụ đề từ lời của từng cảnh</label
+    >
+    <p class="hint">
+      Mỗi lời hiện trong toàn bộ thời lượng cảnh; chưa tự lồng tiếng hoặc căn theo từng từ. Video
+      ngắn sẽ giữ khung hình cuối để đủ thời lượng cảnh. Audio gốc của clip được bỏ.
+    </p>
+    <div class="scenes">
+      @for (scene of scenes(); track scene.id; let i = $index) {
+        <article class="scene">
+          <div class="scene-head">
+            <b>{{ i + 1 }} / {{ scenes().length }}</b>
+            <div>
+              <button
+                (click)="move(i, -1)"
+                [disabled]="disabled() || i === 0"
+                aria-label="Đưa cảnh storyboard lên"
+              >
+                ↑</button
+              ><button
+                (click)="move(i, 1)"
+                [disabled]="disabled() || i === scenes().length - 1"
+                aria-label="Đưa cảnh storyboard xuống"
+              >
+                ↓</button
+              ><button (click)="remove(scene.id)" aria-label="Xóa cảnh storyboard">Xóa</button>
+            </div>
+          </div>
+          <label
+            >Tên cảnh<input
+              [ngModel]="scene.title"
+              (ngModelChange)="change(scene.id, { title: $event })"
+              maxlength="120"
+          /></label>
+          <div class="scene-media">
+            @if (image(scene.assetId)) {
+              <img
+                [src]="'/api/assets/' + scene.assetId + '/file'"
+                alt="Tư liệu của cảnh"
+                loading="lazy"
+              />
+            }
+            <label
+              >Tư liệu của cảnh<select
+                [ngModel]="scene.assetId"
+                (ngModelChange)="change(scene.id, { assetId: $event })"
+              >
+                <option [ngValue]="null">Chọn ảnh / video</option>
+                @for (a of media(); track a.id) {
+                  <option [value]="a.id">{{ a.name }}</option>
+                }
+              </select></label
+            >
+          </div>
+          <div class="timing">
+            <label
+              >Thời lượng cảnh (s)<input
+                type="number"
+                min="0.1"
+                max="600"
+                step="0.1"
+                [ngModel]="scene.duration"
+                (ngModelChange)="change(scene.id, { duration: $event })"
+            /></label>
+            @if (video(scene.assetId)) {
+              <label
+                >Điểm vào cảnh (s)<input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  [ngModel]="scene.start"
+                  (ngModelChange)="change(scene.id, { start: $event })"
+              /></label>
+            }
+          </div>
+          <label
+            >Lời của cảnh<textarea
+              [ngModel]="scene.narration"
+              (ngModelChange)="change(scene.id, { narration: $event })"
+              maxlength="2000"
+              placeholder="Lời dẫn / nội dung phụ đề…"
+            ></textarea>
+          </label>
+          <label
+            >Ghi chú hình ảnh / prompt<textarea
+              [ngModel]="scene.prompt"
+              (ngModelChange)="change(scene.id, { prompt: $event })"
+              maxlength="4000"
+              placeholder="Mô tả cảnh để dùng lại khi tạo tư liệu…"
+            ></textarea>
+          </label>
+        </article>
+      } @empty {
+        <div class="empty">Thêm cảnh hoặc chia kịch bản thành các đoạn ở màn hình Kịch bản AI.</div>
+      }
+    </div>
+    <div class="actions">
+      <button class="secondary" (click)="add()" [disabled]="disabled() || scenes().length >= 30">
+        ＋ Thêm cảnh</button
+      ><button class="secondary" (click)="save.emit()">Lưu storyboard</button
+      ><button
+        class="primary"
+        (click)="render.emit()"
+        [disabled]="disabled() || !scenes().length || total() > 600"
+      >
+        Lưu & dựng storyboard
+      </button>
+    </div>
+  </fieldset>
+</section>

@@ -140,17 +140,21 @@ public class RenderWorker(
             var cache = new Dictionary<(Guid, double, double), (string File, double Duration)>();
             var durations = new Dictionary<Guid, double>();
             double remaining = req.Duration;
-            foreach (var id in req.AssetIds)
+            var captions = new List<SubtitleCue>();
+            double elapsed = 0;
+            for (var index = 0; index < req.AssetIds.Length; index++)
             {
+                var id = req.AssetIds[index];
+                var scene = req.Scenes?[index];
                 ct.ThrowIfCancellationRequested();
                 if (remaining < 1.0 / 60)
                     break;
                 var a = assets[id];
                 var cut = cuts.GetValueOrDefault(id);
-                var start = cut?.Start ?? 0;
+                var start = scene?.Start ?? cut?.Start ?? 0;
                 double sourceDuration;
                 if (a.Kind == "image")
-                    sourceDuration = req.Mode == "loop" ? 1 : 5;
+                    sourceDuration = scene?.Duration ?? (req.Mode == "loop" ? 1 : 5);
                 else if (!durations.TryGetValue(id, out sourceDuration))
                 {
                     sourceDuration = await MediaProcess.Duration(store.AssetPath(a), ct);
@@ -162,7 +166,7 @@ public class RenderWorker(
                 )
                     throw new IOException("Trim is outside source duration.");
                 var available = Math.Min(cut?.End ?? sourceDuration, sourceDuration) - start;
-                var take = Math.Min(remaining, available);
+                var take = Math.Min(remaining, scene?.Duration ?? available);
                 var key = (id, start, take);
                 if (!cache.TryGetValue(key, out var normalized))
                 {
@@ -179,6 +183,10 @@ public class RenderWorker(
                         args.AddRange(["-loop", "1"]);
                     if (start > 0)
                         args.AddRange(["-ss", Number(start)]);
+                    var filter =
+                        $"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30";
+                    if (scene is not null && a.Kind == "video")
+                        filter += $",tpad=stop_mode=clone:stop_duration={Number(take)}";
                     args.AddRange([
                         "-i",
                         store.AssetPath(a),
@@ -187,7 +195,7 @@ public class RenderWorker(
                         "-map",
                         "0:v:0",
                         "-vf",
-                        $"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30",
+                        filter,
                         "-an",
                         "-c:v",
                         "libx264",
@@ -206,6 +214,16 @@ public class RenderWorker(
                     cache[key] = normalized;
                 }
                 parts.Add(normalized.File);
+                var actual = Math.Min(remaining, normalized.Duration);
+                if (req.AutoCaptions && !string.IsNullOrWhiteSpace(scene?.Caption))
+                    captions.Add(
+                        new(
+                            elapsed,
+                            elapsed + actual,
+                            scene.Caption.Replace('\r', ' ').Replace('\n', ' ')
+                        )
+                    );
+                elapsed += actual;
                 remaining -= normalized.Duration;
                 job.Message = $"Đã xử lý {parts.Count}/{req.AssetIds.Length} cảnh";
                 await db.SaveChangesAsync(ct);
@@ -235,14 +253,22 @@ public class RenderWorker(
                 musicIndex = audioIndex++;
                 final.AddRange(["-stream_loop", "-1", "-i", store.AssetPath(assets[music])]);
             }
+            var hasCaptions = req.SubtitleId is not null || captions.Count > 0;
+            if (captions.Count > 0)
+                await File.WriteAllTextAsync(
+                    Path.Combine(temp, "captions.srt"),
+                    Subtitles.Write(captions),
+                    ct
+                );
             if (req.SubtitleId is Guid sub)
             {
                 File.Copy(store.AssetPath(assets[sub]), Path.Combine(temp, "captions.srt"), true);
+            }
+            if (hasCaptions)
                 final.AddRange([
                     "-vf",
                     "subtitles=captions.srt:force_style='FontName=DejaVu Sans,FontSize=18,MarginV=36'",
                 ]);
-            }
             final.AddRange(["-map", "0:v:0"]);
             if (voiceIndex is int vi && musicIndex is int mi)
                 final.AddRange([
@@ -260,9 +286,9 @@ public class RenderWorker(
                 req.Duration.ToString(CultureInfo.InvariantCulture),
                 "-shortest",
                 "-c:v",
-                req.SubtitleId is null ? "copy" : "libx264",
+                hasCaptions ? "libx264" : "copy",
             ]);
-            if (req.SubtitleId is not null)
+            if (hasCaptions)
                 final.AddRange([
                     "-threads",
                     "2",

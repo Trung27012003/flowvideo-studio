@@ -23,6 +23,7 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<StudioDb>();
     await db.Database.EnsureCreatedAsync();
+    await Storyboard.Upgrade(db);
     await db
         .Jobs.Where(x => x.Status == "Running")
         .ExecuteUpdateAsync(s =>
@@ -32,7 +33,7 @@ using (var scope = app.Services.CreateScope())
 }
 app.UseDefaultFiles();
 app.UseStaticFiles();
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.3.0" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.4.0" }));
 app.MapGet(
     "/api/capabilities",
     (IConfiguration c) =>
@@ -212,6 +213,39 @@ app.MapPost(
                     error = "Điểm cắt không hợp lệ. Chỉ cắt video; điểm ra phải lớn hơn điểm vào.",
                 }
             );
+        if (
+            req.Scenes is not null
+            && (
+                req.Mode != "concat"
+                || req.Cuts is { Length: > 0 }
+                || req.Scenes.Length != req.AssetIds.Length
+                || req.Scenes.Any(x =>
+                    x is null
+                    || !double.IsFinite(x.Duration)
+                    || x.Duration < .1
+                    || x.Duration > 600
+                    || !double.IsFinite(x.Start)
+                    || x.Start < 0
+                    || x.Caption is null
+                    || x.Caption.Length > 2000
+                    || x.Caption.Contains('\0')
+                )
+                || !req.Scenes.Select(x => x.AssetId).SequenceEqual(req.AssetIds)
+                || req.Scenes.Any(x =>
+                    assets.Any(a => a.Id == x.AssetId && a.Kind == "image") && x.Start != 0
+                )
+            )
+        )
+            return Results.BadRequest(
+                new { error = "Danh sách cảnh hoặc thời lượng không hợp lệ." }
+            );
+        if (req.AutoCaptions && (req.Scenes is null || req.SubtitleId is not null))
+            return Results.BadRequest(
+                new
+                {
+                    error = "Phụ đề từ cảnh cần storyboard và không dùng đồng thời SRT bên ngoài.",
+                }
+            );
         var job = new RenderJob { ProjectId = id, RequestJson = JsonSerializer.Serialize(req) };
         db.Jobs.Add(job);
         await db.SaveChangesAsync();
@@ -362,6 +396,7 @@ app.MapPost(
     }
 );
 app.MapAudio();
+app.MapStoryboard();
 app.Map("/api/{**path}", () => Results.NotFound());
 app.MapFallbackToFile("index.html");
 app.Run();

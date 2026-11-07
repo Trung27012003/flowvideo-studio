@@ -36,8 +36,12 @@ public record RenderRequest(
     Guid? MusicId = null,
     Guid? SubtitleId = null,
     string Ratio = "9:16",
-    ClipTrim[]? Cuts = null
+    ClipTrim[]? Cuts = null,
+    SceneClip[]? Scenes = null,
+    bool AutoCaptions = false
 );
+
+public record SceneClip(Guid AssetId, double Duration, double Start = 0, string Caption = "");
 
 public record ClipTrim(Guid AssetId, double Start = 0, double? End = null);
 
@@ -50,9 +54,15 @@ public class StudioDb(DbContextOptions<StudioDb> options) : DbContext(options)
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<Asset> Assets => Set<Asset>();
     public DbSet<RenderJob> Jobs => Set<RenderJob>();
+    public DbSet<ProjectDocument> ProjectDocuments => Set<ProjectDocument>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<ProjectDocument>().HasKey(x => x.ProjectId);
+        b.Entity<ProjectDocument>()
+            .HasOne<Project>()
+            .WithOne()
+            .HasForeignKey<ProjectDocument>(x => x.ProjectId);
         b.Entity<Asset>().HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId);
         b.Entity<RenderJob>().HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId);
     }

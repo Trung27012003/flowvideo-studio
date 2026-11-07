@@ -1,4 +1,4 @@
-# Kiến trúc v0.3
+# Kiến trúc v0.4
 
 Angular → HTTP API ASP.NET Core → EF Core SQLite; BackgroundService đọc job queued và gọi FFmpeg. Browser polling theo tải: 2,5 giây khi active, 15 giây khi idle, 30 giây khi lỗi; không gửi khi tab ẩn. Mỗi vòng đợi request hoàn tất trước khi hẹn lần sau; version guard tránh phản hồi cũ ghi đè dự án mới. File dùng ID sinh bởi server, không dùng tên upload làm đường dẫn. FFmpeg arguments được truyền bằng ArgumentList, không qua shell.
 
@@ -14,7 +14,7 @@ Project → Asset và RenderJob. RenderRequest được serialize trong job, lư
 4. Nối clip, thêm audio và SRT, giới hạn thời lượng, xuất MP4.
 5. Đánh dấu Succeeded hoặc Failed và dọn file tạm.
 
-Lần chạy đầu dùng EnsureCreated. Khi thay đổi schema cần chuyển sang EF migrations trước khi phân phối bản nâng cấp. Không chạy nhiều instance backend trên cùng data directory; chưa có distributed lock. File upload chưa hợp lệ có thể được nhận rồi thất bại lúc render; bổ sung ffprobe validation là bước kế tiếp.
+Lần chạy đầu dùng EnsureCreated. v0.4 thêm bảng ProjectDocuments bằng một lệnh CREATE TABLE IF NOT EXISTS có giới hạn rõ, chạy cho cả database mới/cũ; đã kiểm thử giữ nguyên project/media của schema cũ. Các thay đổi schema tiếp theo cần chuyển sang migration có phiên bản đầy đủ. Không chạy nhiều instance backend trên cùng data directory; chưa có distributed lock. File upload chưa hợp lệ có thể được nhận rồi thất bại lúc render; bổ sung ffprobe validation là bước kế tiếp.
 
 ## Quyết định có chủ ý
 
@@ -37,3 +37,11 @@ Giữ nguyên schema SQLite hiện có. Cuts được lưu trong RequestJson, jo
 `Subtitles` chuẩn hóa UTF-8/newline, kiểm tra thứ tự thời gian và đánh số lại. Lưu SRT luôn tạo asset mới để không sửa file mà render hiện tại có thể đang dùng. Không thay đổi schema database. Audio/sub xử lý đồng bộ theo HTTP request, chưa dùng hàng đợi render; reload/đứt kết nối có thể hủy xử lý local và không đảm bảo dịch vụ AI chưa tính phí.
 
 `Studio.Api.Tests` dùng WebApplicationFactory và HTTP handler mô phỏng cho upstream, nhưng dùng SQLite/FFmpeg thật. CI không dùng key thật hay gọi mạng AI. `FlowVideo.sln` chứa API và test project.
+
+## Storyboard v0.4
+
+ProjectDocuments lưu một bản hiện tại cho mỗi project: JSON ý tưởng/kịch bản/cảnh, Version và UpdatedAt. Tạo lần đầu dựa vào primary key; cập nhật dùng UPDATE có điều kiện Version. Bản cũ nhận 409, không tự ghi đè. Version phục vụ kiểm tra đồng thời, chưa phải lịch sử có thể khôi phục.
+
+Endpoint dựng đọc bản đã lưu theo version yêu cầu, kiểm tra asset cùng dự án rồi tạo RenderJob với snapshot SceneClip. Worker dùng duration/start theo từng occurrence nên một asset có thể dùng lại ở nhiều cảnh. Với video thiếu thời lượng, filter tpad giữ frame cuối; ảnh dùng đúng duration cảnh. SubtitleCue được tính sau normalize bằng thời lượng thực tế của mỗi part, lời rỗng được bỏ qua; phụ đề cảnh được burn-in, chưa thành asset SRT riêng. TTS không được gọi ngầm khi dựng.
+
+Script và board được lưu cùng document. Frontend đọc lại theo project, giữ draft trong RAM đến khi bấm lưu. Component StoryboardEditor tách khỏi App. localStorage chỉ nhớ project ID gần nhất; dữ liệu nội dung nằm ở backend.
