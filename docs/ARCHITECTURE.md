@@ -1,4 +1,4 @@
-# Kiến trúc v0.5
+# Kiến trúc v0.6
 
 Angular → HTTP API ASP.NET Core → EF Core SQLite; BackgroundService đọc job queued và gọi FFmpeg. Browser polling theo tải: 2,5 giây khi active, 15 giây khi idle, 30 giây khi lỗi; không gửi khi tab ẩn. Mỗi vòng đợi request hoàn tất trước khi hẹn lần sau; version guard tránh phản hồi cũ ghi đè dự án mới. File dùng ID sinh bởi server, không dùng tên upload làm đường dẫn. FFmpeg arguments được truyền bằng ArgumentList, không qua shell.
 
@@ -55,3 +55,11 @@ Intake dùng semaphore trong một backend để kiểm tra idempotency, scene/v
 ImageProvider chỉ gọi endpoint OpenAI cố định, không retry; 90 giây bao gồm body, tối đa 24 MiB JSON và 16 MiB PNG giải mã. Kiểm tra PNG header, codec/dimensions bằng ffprobe rồi decode/re-encode một frame bằng FFmpeg trước khi lưu asset. File tạm/lỗi được dọn. Network/timeout → Unknown; provider/output lỗi → Failed, vẫn thông báo khả năng tính phí. Không tự tìm lại kết quả ở provider sau Unknown.
 
 Frontend polling chung render và ảnh; ảnh mới được thêm vào thư viện, áp dụng vào scene chỉ khi người dùng bấm và cần lưu storyboard. Browser contract test mô phỏng capability/history/create API ảnh, nhưng upload asset, lưu document và render vẫn dùng backend/FFmpeg thật. ImageTests kiểm tra provider HTTP bằng fake handler, không gọi dịch vụ tính phí.
+
+## Batch tools v0.6
+
+Resolution/VoiceGain/MusicGain là trường JSON optional với default 720/1/0.18 ở RenderRequest và StoryDocument; không đổi schema SQLite. Worker chuẩn hóa trực tiếp về kích thước đích, dùng gain độc lập và alimiter (limit 0.95, không auto level, bù latency) trên audio. SRT burn-in được giữ trong exports sau render và chỉ được phục vụ khi job Succeeded; hủy/lỗi dọn cả MP4 và SRT.
+
+ProjectTools xuất package flowvideo.storyboard schemaVersion 1, không chứa file media hoặc secret. Nhập giới hạn 2 MiB, kiểm tra structure/options, bỏ asset/voice/music references, reset start về 0, tạo scene/project IDs mới và lưu transaction. Frontend lưu bản đang sửa trước export/import để giữ thay đổi. Import tạo project mới, không thay dữ liệu project cũ.
+
+Thư viện tìm/lọc bằng computed signals; preview dùng dialog native để quản lý focus/Escape. Video/audio preload metadata, SRT preview giới hạn 128 KiB. Preset/duplicate chỉ thay draft; cần lưu để giữ. Preset không reset tư liệu, lời, nhạc hay gain. Test mixer giải mã PCM từ MP4 thật và đo RMS, test 1080p dùng ffprobe, browser kiểm tra cả 10 chức năng và JSON round trip.

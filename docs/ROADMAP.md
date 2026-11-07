@@ -42,6 +42,19 @@
 - [x] Lưu thư viện và gắn vào cảnh bằng thao tác rõ ràng
 - [x] Provider contract tests và browser UI contract với upstream mô phỏng
 
+## V0.6 — đợt 10 chức năng đã bổ sung
+
+- [x] Tìm thư viện không dấu
+- [x] Lọc thư viện theo loại
+- [x] Xem trước media/SRT bằng dialog
+- [x] Nhân bản cảnh
+- [x] Xuất JSON storyboard
+- [x] Nhập JSON thành dự án mới
+- [x] Tải SRT của render hoàn tất
+- [x] Preset Shorts/YouTube/720p
+- [x] Mixer âm lượng giọng và nhạc
+- [x] Render Full HD 1080p
+
 ## Tiếp theo — chất lượng nền tảng (2–3 tuần)
 
 - ffprobe kiểm tra file ngay sau upload; duration, thumbnail, waveform
@@ -62,14 +75,14 @@
 - Tự tạo giọng/tư liệu cho từng cảnh, trạng thái từng bước và resume
 - Trần ngân sách; cache kết quả và invalidation khi sửa cảnh
 
-## V0.6 — video AI và ảnh tham chiếu (3–4 tuần)
+## V0.7 — video AI và ảnh tham chiếu (3–4 tuần)
 
 - Một provider video có API chính thức; image-to-image và ảnh tham chiếu
 - Capability matrix; ảnh tham chiếu và hồ sơ nhân vật
 - Hoàn thiện đối soát request và số tiền sử dụng theo provider
 - Tạo lại từng cảnh, lựa chọn kết quả, usage/cost ledger
 
-## V0.7 — editor, loop và clip thông minh (4–6 tuần)
+## V0.8 — editor, loop và clip thông minh (4–6 tuần)
 
 - Timeline trim/split/reorder/undo, proxy và render preview
 - Loop crossfade/ping-pong, preview điểm nối và audio loop riêng

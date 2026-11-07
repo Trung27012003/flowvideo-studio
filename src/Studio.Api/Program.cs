@@ -38,7 +38,7 @@ using (var scope = app.Services.CreateScope())
 }
 app.UseDefaultFiles();
 app.UseStaticFiles();
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.5.0" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.6.0" }));
 app.MapGet(
     "/api/capabilities",
     (IConfiguration c) =>
@@ -147,8 +147,9 @@ app.MapGet(
 );
 app.MapGet(
     "/api/projects/{id:guid}/jobs",
-    async (Guid id, StudioDb db) =>
-        await db
+    async (Guid id, StudioDb db, Storage store) =>
+    {
+        var rows = await db
             .Jobs.AsNoTracking()
             .Where(x => x.ProjectId == id)
             .OrderByDescending(x => x.CreatedAt)
@@ -161,7 +162,19 @@ app.MapGet(
                 x.Message,
                 x.CreatedAt,
             })
-            .ToListAsync()
+            .ToListAsync();
+        return Results.Ok(
+            rows.Select(x => new
+            {
+                x.Id,
+                x.ProjectId,
+                x.Status,
+                x.Message,
+                x.CreatedAt,
+                hasSubtitles = x.Status == "Succeeded" && File.Exists(store.Subtitles(x.Id)),
+            })
+        );
+    }
 );
 app.MapPost(
     "/api/projects/{id:guid}/renders",
@@ -170,7 +183,12 @@ app.MapPost(
         if (!await db.Projects.AnyAsync(x => x.Id == id))
             return Results.NotFound();
         if (
-            req.AssetIds is null
+            req.Resolution is not (720 or 1080)
+            || !double.IsFinite(req.VoiceGain)
+            || req.VoiceGain is < 0 or > 2
+            || !double.IsFinite(req.MusicGain)
+            || req.MusicGain is < 0 or > 2
+            || req.AssetIds is null
             || req.AssetIds.Length is < 1 or > 30
             || req.Duration is < 1 or > 600
             || (req.Mode != "concat" && req.Mode != "loop")
@@ -404,6 +422,7 @@ app.MapPost(
 app.MapAudio();
 app.MapStoryboard();
 app.MapImages();
+app.MapProjectTools();
 app.Map("/api/{**path}", () => Results.NotFound());
 app.MapFallbackToFile("index.html");
 app.Run();

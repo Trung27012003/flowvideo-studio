@@ -112,6 +112,7 @@ public class RenderWorker(
         try
         {
             File.Delete(store.Output(id));
+            File.Delete(store.Subtitles(id));
         }
         catch (IOException ex)
         {
@@ -133,7 +134,9 @@ public class RenderWorker(
         var cuts = (req.Cuts ?? []).ToDictionary(x => x.AssetId);
         var temp = Path.Combine(store.Root, "temp", job.Id.ToString("N"));
         Directory.CreateDirectory(temp);
-        var (w, h) = req.Ratio == "16:9" ? (1280, 720) : (720, 1280);
+        var shortEdge = req.Resolution;
+        var longEdge = req.Resolution == 1080 ? 1920 : 1280;
+        var (w, h) = req.Ratio == "16:9" ? (longEdge, shortEdge) : (shortEdge, longEdge);
         try
         {
             var parts = new List<string>();
@@ -273,14 +276,24 @@ public class RenderWorker(
             if (voiceIndex is int vi && musicIndex is int mi)
                 final.AddRange([
                     "-filter_complex",
-                    $"[{vi}:a]apad[v];[{mi}:a]volume=0.18[m];[v][m]amix=inputs=2:duration=longest:normalize=0[a]",
+                    $"[{vi}:a]volume={Number(req.VoiceGain)},apad[v];[{mi}:a]volume={Number(req.MusicGain)}[m];[v][m]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.95:level=false:latency=true[a]",
                     "-map",
                     "[a]",
                 ]);
             else if (voiceIndex is int v)
-                final.AddRange(["-af", "apad", "-map", $"{v}:a"]);
+                final.AddRange([
+                    "-af",
+                    $"volume={Number(req.VoiceGain)},apad,alimiter=limit=0.95:level=false:latency=true",
+                    "-map",
+                    $"{v}:a",
+                ]);
             else if (musicIndex is int m)
-                final.AddRange(["-af", "volume=0.18", "-map", $"{m}:a"]);
+                final.AddRange([
+                    "-af",
+                    $"volume={Number(req.MusicGain)},alimiter=limit=0.95:level=false:latency=true",
+                    "-map",
+                    $"{m}:a",
+                ]);
             final.AddRange([
                 "-t",
                 req.Duration.ToString(CultureInfo.InvariantCulture),
@@ -305,6 +318,8 @@ public class RenderWorker(
             await MediaProcess.Run("ffmpeg", final, temp, ct);
             ct.ThrowIfCancellationRequested();
             File.Move(Path.Combine(temp, "export.mp4"), store.Output(job.Id), true);
+            if (hasCaptions)
+                File.Copy(Path.Combine(temp, "captions.srt"), store.Subtitles(job.Id), true);
         }
         finally
         {

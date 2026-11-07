@@ -38,7 +38,10 @@ public record RenderRequest(
     string Ratio = "9:16",
     ClipTrim[]? Cuts = null,
     SceneClip[]? Scenes = null,
-    bool AutoCaptions = false
+    bool AutoCaptions = false,
+    int Resolution = 720,
+    double VoiceGain = 1,
+    double MusicGain = .18
 );
 
 public record SceneClip(Guid AssetId, double Duration, double Start = 0, string Caption = "");
@@ -85,6 +88,8 @@ public class Storage
     }
 
     public string AssetPath(Asset a) => Path.Combine(Root, "assets", a.StoredName);
+
+    public string Subtitles(Guid id) => Path.Combine(Root, "exports", id + ".srt");
 
     public string Output(Guid id) => Path.Combine(Root, "exports", id + ".mp4");
 }

@@ -34,6 +34,10 @@ export class StoryboardEditor {
   voiceId = model('');
   musicId = model('');
   autoCaptions = model(true);
+  resolution = model(720);
+  voiceGain = model(1);
+  musicGain = model(0.18);
+  export = output<void>();
   assets = input<{ id: string; name: string; kind: string }[]>([]);
   disabled = input(false);
   version = input(0);
@@ -60,6 +64,28 @@ export class StoryboardEditor {
         start: 0,
       },
     ]);
+  }
+  duplicate(id: string) {
+    if (this.scenes().length >= 30) return;
+    this.scenes.update((list) => {
+      const index = list.findIndex((s) => s.id === id);
+      if (index < 0) return list;
+      const clone = {
+        ...list[index],
+        id: crypto.randomUUID(),
+        title: list[index].title.slice(0, 109) + ' (bản sao)',
+      };
+      return [...list.slice(0, index + 1), clone, ...list.slice(index + 1)];
+    });
+  }
+  preset(name: 'shorts' | 'youtube' | 'draft') {
+    if (name === 'shorts') {
+      this.ratio.set('9:16');
+      this.resolution.set(1080);
+    } else if (name === 'youtube') {
+      this.ratio.set('16:9');
+      this.resolution.set(1080);
+    } else this.resolution.set(720);
   }
   change(id: string, patch: Partial<SceneDraft>) {
     this.scenes.update((list) =>

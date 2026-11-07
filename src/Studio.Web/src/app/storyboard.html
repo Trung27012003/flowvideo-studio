@@ -9,6 +9,12 @@
     <span class="hint">Nhớ lưu sau khi chỉnh sửa.</span>
   </div>
   <fieldset [disabled]="disabled()">
+    <div class="preset-actions">
+      <span>Preset nhanh</span
+      ><button class="secondary" (click)="preset('shorts')">Preset Shorts</button
+      ><button class="secondary" (click)="preset('youtube')">Preset YouTube</button
+      ><button class="secondary" (click)="preset('draft')">Preset 720p</button>
+    </div>
     <div class="settings">
       <label
         >Tỉ lệ<select [ngModel]="ratio()" (ngModelChange)="ratio.set($event)">
@@ -32,6 +38,37 @@
           }
         </select></label
       >
+    </div>
+    <div class="settings">
+      <label
+        >Độ phân giải storyboard<select
+          [ngModel]="resolution()"
+          (ngModelChange)="resolution.set($event)"
+        >
+          <option [ngValue]="720">720p</option>
+          <option [ngValue]="1080">1080p</option>
+        </select></label
+      >
+      <label
+        >Âm lượng giọng storyboard · {{ (voiceGain() * 100).toFixed(0) }}%<input
+          type="range"
+          min="0"
+          max="200"
+          step="1"
+          [ngModel]="voiceGain() * 100"
+          (ngModelChange)="voiceGain.set($event / 100)"
+          aria-label="Âm lượng giọng storyboard"
+      /></label>
+      <label
+        >Âm lượng nhạc storyboard · {{ (musicGain() * 100).toFixed(0) }}%<input
+          type="range"
+          min="0"
+          max="200"
+          step="1"
+          [ngModel]="musicGain() * 100"
+          (ngModelChange)="musicGain.set($event / 100)"
+          aria-label="Âm lượng nhạc storyboard"
+      /></label>
     </div>
     <label class="checkbox"
       ><input
@@ -62,6 +99,12 @@
                 aria-label="Đưa cảnh storyboard xuống"
               >
                 ↓</button
+              ><button
+                (click)="duplicate(scene.id)"
+                [disabled]="disabled() || scenes().length >= 30"
+                aria-label="Nhân bản cảnh storyboard"
+              >
+                Nhân bản</button
               ><button (click)="remove(scene.id)" aria-label="Xóa cảnh storyboard">Xóa</button>
             </div>
           </div>
@@ -154,6 +197,7 @@
       <button class="secondary" (click)="add()" [disabled]="disabled() || scenes().length >= 30">
         ＋ Thêm cảnh</button
       ><button class="secondary" (click)="save.emit()">Lưu storyboard</button
+      ><button class="secondary" (click)="export.emit()">Xuất storyboard JSON</button
       ><button
         class="primary"
         (click)="render.emit()"

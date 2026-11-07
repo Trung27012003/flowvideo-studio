@@ -68,7 +68,7 @@
         ></span
       >
       <div class="header-right">
-        <span class="pill">MVP v0.5</span
+        <span class="pill">MVP v0.6</span
         ><select
           aria-label="Chọn dự án"
           [ngModel]="projectId()"
@@ -107,6 +107,14 @@
           maxlength="120"
           aria-label="Tên dự án mới"
         /><button class="secondary" [disabled]="busy() || !projectName.trim()">＋ Tạo dự án</button>
+        <label class="secondary import-file" [class.disabled]="busy()"
+          >Nhập storyboard JSON<input
+            type="file"
+            accept=".json,application/json"
+            aria-label="Nhập storyboard JSON"
+            (change)="importStoryboard($event)"
+            [disabled]="busy()"
+        /></label>
       </form>
       @if (error()) {
         <div class="alert error" role="alert">{{ error() }}</div>
@@ -150,6 +158,28 @@
                 /></label>
               </div>
               <label
+                >Độ phân giải<select [(ngModel)]="resolution">
+                  <option [ngValue]="720">720p</option>
+                  <option [ngValue]="1080">1080p</option>
+                </select></label
+              >
+              <label
+                >Âm lượng giọng · {{ voiceVolume }}%<input
+                  type="range"
+                  min="0"
+                  max="200"
+                  [(ngModel)]="voiceVolume"
+                  aria-label="Âm lượng giọng Studio"
+              /></label>
+              <label
+                >Âm lượng nhạc · {{ musicVolume }}%<input
+                  type="range"
+                  min="0"
+                  max="200"
+                  [(ngModel)]="musicVolume"
+                  aria-label="Âm lượng nhạc Studio"
+              /></label>
+              <label
                 >Giọng đọc từ file audio<select [(ngModel)]="voiceId">
                   <option value="">Không sử dụng</option>
                   @for (a of audio(); track a.id) {
@@ -158,7 +188,7 @@
                 </select></label
               >
               <label
-                >Nhạc nền · âm lượng 18%<select [(ngModel)]="musicId">
+                >Nhạc nền<select [(ngModel)]="musicId">
                   <option value="">Không sử dụng</option>
                   @for (a of audio(); track a.id) {
                     <option [value]="a.id">{{ a.name }}</option>
@@ -283,6 +313,9 @@
                     Xem</button
                   ><a class="download" [href]="'/api/jobs/' + j.id + '/download'">Tải MP4 ↓</a>
                 }
+                @if (j.status === 'Succeeded' && j.hasSubtitles) {
+                  <a class="download" [href]="'/api/jobs/' + j.id + '/subtitles'">Tải SRT ↓</a>
+                }
                 @if (j.status === 'Queued' || j.status === 'Running') {
                   <button class="secondary" (click)="cancel(j.id)" [disabled]="busy()">Hủy</button>
                 }
@@ -322,27 +355,52 @@
               ><span>Ảnh · video · audio · phụ đề</span></label
             >
           }
+          <div class="library-tools">
+            <label
+              >Tìm tài nguyên<input
+                type="search"
+                [ngModel]="libraryQuery()"
+                (ngModelChange)="libraryQuery.set($event)"
+                placeholder="Tìm theo tên, không cần gõ dấu…" /></label
+            ><label
+              >Loại tài nguyên<select
+                [ngModel]="libraryKind()"
+                (ngModelChange)="libraryKind.set($event)"
+              >
+                <option value="all">Tất cả</option>
+                <option value="image">Ảnh</option>
+                <option value="video">Video</option>
+                <option value="audio">Audio</option>
+                <option value="subtitle">Phụ đề</option>
+              </select></label
+            ><button class="secondary" (click)="libraryQuery.set(''); libraryKind.set('all')">
+              Xóa bộ lọc</button
+            ><span>{{ filteredAssets().length }} / {{ assets().length }} tài nguyên</span>
+          </div>
           <div class="library">
-            @for (a of assets(); track a.id) {
-              <a
-                class="library-card"
-                [href]="'/api/assets/' + a.id + '/file'"
-                target="_blank"
-                rel="noopener"
-              >
-                @if (a.kind === 'image') {
-                  <img [src]="'/api/assets/' + a.id + '/file'" alt="" />
-                } @else {
-                  <div class="media-symbol">
-                    {{ a.kind === 'video' ? '▷' : a.kind === 'audio' ? '♫' : '≡' }}
-                  </div>
-                }
-                <b>{{ a.name }}</b
-                ><small>{{ a.kind }}</small></a
-              >
+            @for (a of filteredAssets(); track a.id) {
+              <article class="library-card">
+                <button
+                  class="media-preview"
+                  (click)="openAsset(a)"
+                  [attr.aria-label]="'Xem trước ' + a.name"
+                >
+                  @if (a.kind === 'image') {
+                    <img [src]="'/api/assets/' + a.id + '/file'" alt="" loading="lazy" />
+                  } @else {
+                    <div class="media-symbol">
+                      {{ a.kind === 'video' ? '▷' : a.kind === 'audio' ? '♫' : '≡' }}
+                    </div>
+                  }
+                </button>
+                <a [href]="'/api/assets/' + a.id + '/file'" target="_blank" rel="noopener"
+                  ><b>{{ a.name }}</b
+                  ><small>{{ a.kind }}</small></a
+                >
+              </article>
             } @empty {
               <div class="small-empty">
-                Chưa có tài nguyên. Hãy chọn hoặc tạo dự án rồi nhập file.
+                Không có tài nguyên phù hợp. Thử xóa bộ lọc hoặc nhập thêm file.
               </div>
             }
           </div>
@@ -419,6 +477,10 @@
             [(voiceId)]="boardVoice"
             [(musicId)]="boardMusic"
             [(autoCaptions)]="boardCaptions"
+            [(resolution)]="boardResolution"
+            [(voiceGain)]="boardVoiceGain"
+            [(musicGain)]="boardMusicGain"
+            (export)="exportStoryboard()"
             [assets]="assets()"
             [imageEnabled]="imageEnabled()"
             [imageJobs]="imageJobs()"
@@ -592,7 +654,7 @@
       }
       @if (tab() === 'roadmap') {
         <section class="panel roadmap">
-          <h2>Đã hoạt động trong v0.5</h2>
+          <h2>Đã hoạt động trong v0.6</h2>
           <p>
             Quản lý dự án và media, cắt điểm vào/ra từng clip, ghép ảnh/video, loop trực tiếp, audio
             từ file, phụ đề SRT, hàng đợi lưu SQLite và tải MP4. Viết kịch bản, tạo giọng đọc và
@@ -613,3 +675,38 @@
     <footer>FLOWVIDEO STUDIO <span>Made for your next story.</span></footer>
   </div>
 </div>
+
+<dialog
+  aria-label="Xem trước tài nguyên"
+  #mediaDialog
+  class="media-dialog"
+  (close)="assetPreview.set(null)"
+>
+  <div class="dialog-header">
+    <h2>{{ assetPreview()?.name }}</h2>
+    <button autofocus (click)="mediaDialog.close()" aria-label="Đóng xem trước tài nguyên">
+      Đóng ×
+    </button>
+  </div>
+  @if (assetPreview(); as asset) {
+    @if (asset.kind === 'image') {
+      <img [src]="'/api/assets/' + asset.id + '/file'" alt="Tài nguyên xem trước" />
+    }
+    @if (asset.kind === 'video') {
+      <video controls preload="metadata" [src]="'/api/assets/' + asset.id + '/file'"></video>
+    }
+    @if (asset.kind === 'audio') {
+      <audio controls preload="metadata" [src]="'/api/assets/' + asset.id + '/file'"></audio>
+    }
+    @if (asset.kind === 'subtitle') {
+      <pre>{{ previewText() }}</pre>
+    }
+    @if (previewError()) {
+      <p role="alert">{{ previewError() }}</p>
+    }
+    <p class="hint">Khả năng phát audio/video phụ thuộc codec trình duyệt.</p>
+    <a class="download" [href]="'/api/assets/' + asset.id + '/file'" [download]="asset.name"
+      >Tải tài nguyên ↓</a
+    >
+  }
+</dialog>

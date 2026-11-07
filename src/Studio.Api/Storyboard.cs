@@ -28,7 +28,10 @@ public record StoryDocument(
     string Ratio = "9:16",
     Guid? VoiceId = null,
     Guid? MusicId = null,
-    bool AutoCaptions = true
+    bool AutoCaptions = true,
+    int Resolution = 720,
+    double VoiceGain = 1,
+    double MusicGain = .18
 );
 
 public record SaveDocument(int Version, StoryDocument Document);
@@ -156,7 +159,10 @@ public static class Storyboard
                     MusicId: document.MusicId,
                     Ratio: document.Ratio,
                     Scenes: clips,
-                    AutoCaptions: document.AutoCaptions
+                    AutoCaptions: document.AutoCaptions,
+                    Resolution: document.Resolution,
+                    VoiceGain: document.VoiceGain,
+                    MusicGain: document.MusicGain
                 );
                 var job = new RenderJob
                 {
@@ -186,7 +192,7 @@ public static class Storyboard
             }
         );
 
-    private static async Task<string?> Validate(
+    internal static async Task<string?> Validate(
         Guid projectId,
         StoryDocument doc,
         StudioDb db,
@@ -200,6 +206,11 @@ public static class Storyboard
             || doc.Script is null
             || doc.Script.Length > 50000
             || doc.Ratio is not ("9:16" or "16:9")
+            || doc.Resolution is not (720 or 1080)
+            || !double.IsFinite(doc.VoiceGain)
+            || doc.VoiceGain is < 0 or > 2
+            || !double.IsFinite(doc.MusicGain)
+            || doc.MusicGain is < 0 or > 2
             || doc.Scenes is null
             || doc.Scenes.Length > 30
         )

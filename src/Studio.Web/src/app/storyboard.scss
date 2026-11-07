@@ -185,3 +185,30 @@ select {
     width: 100%;
   }
 }
+
+.preset-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.preset-actions span,
+.preset-actions button {
+  font-size: 11px;
+}
+.scene-head {
+  flex-wrap: wrap;
+}
+.scene-head > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.scene-head button {
+  margin: 0;
+}
+input[type='range'] {
+  padding: 0;
+  accent-color: #4be0c0;
+}

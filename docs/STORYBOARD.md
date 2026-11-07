@@ -17,7 +17,9 @@ Tạo storyboard/dựng từ tư liệu có sẵn không gọi AI, không cần 
 
 Mỗi cảnh có thời lượng riêng, từ 0,1 giây; tổng tối đa 600 giây, tối đa 30 cảnh. Ảnh hiển thị theo thời lượng cảnh. Video lấy từ điểm vào; nếu thiếu khung hình, giữ frame cuối cho đủ thời lượng. Một video có thể xuất hiện trong nhiều cảnh với điểm vào/thời lượng khác nhau. Điểm vào phải nằm trong nguồn; vượt nguồn sẽ khiến job lỗi.
 
-Đầu ra 30 fps nên thời gian được lượng tử theo frame. Phụ đề từ lời được căn theo thời lượng part đã normalize, hiển thị toàn cảnh; chưa căn từng từ hoặc theo lời đọc. Lời rỗng không tạo cue. Ghi chú prompt và tên cảnh không được in vào video. Phụ đề này được burn-in, chưa lưu thành file SRT tải riêng. Audio gốc của clip vẫn bị bỏ.
+Preset Shorts chọn dọc 1080p, YouTube chọn ngang 1080p, preset 720p chỉ giảm độ phân giải. Có thể chỉnh giọng/nhạc 0–200%; các lựa chọn được lưu trong dự án và file JSON.
+
+Đầu ra 30 fps nên thời gian được lượng tử theo frame. Phụ đề từ lời được căn theo thời lượng part đã normalize, hiển thị toàn cảnh; chưa căn từng từ hoặc theo lời đọc. Lời rỗng không tạo cue. Ghi chú prompt và tên cảnh không được in vào video. Từ v0.6, phụ đề này được burn-in và có thể tải SRT riêng từ job hoàn tất. SRT cũ của các job trước v0.6 không được tạo bù. Audio gốc của clip vẫn bị bỏ.
 
 ## Lưu và đồng thời
 

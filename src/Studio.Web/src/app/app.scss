@@ -592,3 +592,105 @@ footer span {
   gap: 20px;
   flex-wrap: wrap;
 }
+
+.project-bar {
+  flex-wrap: wrap;
+}
+.import-file {
+  border: 1px solid #2b384b;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+.import-file input {
+  display: none;
+}
+.import-file.disabled {
+  opacity: 0.45;
+  cursor: wait;
+}
+.library-tools {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+.library-tools label {
+  font-size: 11px;
+  color: #9fb3ca;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 150px;
+}
+.library-tools span {
+  font-size: 11px;
+  color: #8fa5be;
+}
+.library-tools button {
+  font-size: 11px;
+}
+.media-preview {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+}
+.media-preview img {
+  display: block;
+}
+.media-dialog {
+  width: min(900px, 94vw);
+  max-height: 90vh;
+  border: 1px solid #344c65;
+  background: #111c2a;
+  color: #e5edf9;
+  border-radius: 14px;
+  padding: 24px;
+  overflow: auto;
+}
+.media-dialog::backdrop {
+  background: #03080ddd;
+}
+.dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 20px;
+}
+.dialog-header h2 {
+  overflow-wrap: anywhere;
+}
+.media-dialog img,
+.media-dialog video {
+  display: block;
+  max-width: 100%;
+  max-height: 65vh;
+  margin: auto;
+}
+.media-dialog audio {
+  width: 100%;
+  display: block;
+}
+.media-dialog pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 55vh;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.media-dialog .hint {
+  margin: 18px 0;
+}
+.media-dialog .download {
+  font-size: 12px;
+}

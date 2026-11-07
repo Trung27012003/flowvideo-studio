@@ -1,4 +1,12 @@
-import { Component, OnDestroy, OnInit, signal, computed } from '@angular/core';
+import {
+  Component,
+  OnDestroy,
+  OnInit,
+  signal,
+  computed,
+  ViewChild,
+  ElementRef,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { StoryboardEditor, SceneDraft, ImageRow } from './storyboard';
 interface Project {
@@ -15,6 +23,7 @@ interface Job {
   status: string;
   message: string;
   createdAt: string;
+  hasSubtitles: boolean;
 }
 @Component({
   selector: 'app-root',
@@ -59,6 +68,27 @@ export class App implements OnInit, OnDestroy {
   transcriptionSources = computed(() =>
     this.assets().filter((a) => a.kind === 'audio' || a.kind === 'video'),
   );
+  libraryQuery = signal('');
+  libraryKind = signal('all');
+  private normalized(text: string) {
+    return text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .replace(/đ/g, 'd');
+  }
+  filteredAssets = computed(() => {
+    const query = this.normalized(this.libraryQuery().trim());
+    return this.assets().filter(
+      (a) =>
+        (this.libraryKind() === 'all' || a.kind === this.libraryKind()) &&
+        this.normalized(a.name).includes(query),
+    );
+  });
+  assetPreview = signal<Asset | null>(null);
+  previewText = signal('');
+  previewError = signal('');
+  @ViewChild('mediaDialog', { static: true }) mediaDialog!: ElementRef<HTMLDialogElement>;
   projectName = '';
   mode = 'concat';
   duration = 30;
@@ -75,6 +105,12 @@ export class App implements OnInit, OnDestroy {
   boardVoice = signal('');
   boardMusic = signal('');
   boardCaptions = signal(true);
+  boardResolution = signal(720);
+  boardVoiceGain = signal(1);
+  boardMusicGain = signal(0.18);
+  resolution = 720;
+  voiceVolume = 100;
+  musicVolume = 18;
   cuts = signal<Record<string, { start: number; end: number | null }>>({});
   syncError = signal(false);
   private destroyed = false;
@@ -168,6 +204,15 @@ export class App implements OnInit, OnDestroy {
   async selectProject(id: string) {
     const version = ++this.projectVersion;
     this.projectId.set(id);
+    this.libraryQuery.set('');
+    this.libraryKind.set('all');
+    if (this.mediaDialog?.nativeElement.open) this.mediaDialog.nativeElement.close();
+    this.boardResolution.set(720);
+    this.boardVoiceGain.set(1);
+    this.boardMusicGain.set(0.18);
+    this.resolution = 720;
+    this.voiceVolume = 100;
+    this.musicVolume = 18;
     this.idea = '';
     this.script.set('');
     this.scenes.set([]);
@@ -208,6 +253,9 @@ export class App implements OnInit, OnDestroy {
         this.boardVoice.set(doc.voiceId || '');
         this.boardMusic.set(doc.musicId || '');
         this.boardCaptions.set(doc.autoCaptions);
+        this.boardResolution.set(doc.resolution ?? 720);
+        this.boardVoiceGain.set(doc.voiceGain ?? 1);
+        this.boardMusicGain.set(doc.musicGain ?? 0.18);
         this.documentVersion.set(result.version);
         this.documentLoaded.set(true);
       }),
@@ -311,6 +359,9 @@ export class App implements OnInit, OnDestroy {
           mode: this.mode,
           duration: this.duration,
           ratio: this.ratio,
+          resolution: this.resolution,
+          voiceGain: this.voiceVolume / 100,
+          musicGain: this.musicVolume / 100,
           voiceId: this.voiceId || null,
           musicId: this.musicId || null,
           subtitleId: this.subtitleId || null,
@@ -422,6 +473,9 @@ export class App implements OnInit, OnDestroy {
           voiceId: this.boardVoice() || null,
           musicId: this.boardMusic() || null,
           autoCaptions: this.boardCaptions(),
+          resolution: this.boardResolution(),
+          voiceGain: this.boardVoiceGain(),
+          musicGain: this.boardMusicGain(),
         },
       }),
     });
@@ -480,6 +534,74 @@ export class App implements OnInit, OnDestroy {
         'Đã lưu và đưa storyboard vào hàng đợi. Chỉnh sửa tiếp theo không thay đổi tác vụ này.',
       );
     });
+  }
+  async openAsset(asset: Asset) {
+    this.assetPreview.set(asset);
+    this.previewError.set('');
+    this.previewText.set('Đang tải…');
+    if (!this.mediaDialog.nativeElement.open) this.mediaDialog.nativeElement.showModal();
+    if (asset.kind === 'subtitle') {
+      try {
+        const response = await fetch('/api/assets/' + asset.id + '/file', {
+          signal: AbortSignal.any([this.controller.signal, AbortSignal.timeout(30000)]),
+        });
+        if (!response.ok) throw new Error('Không đọc được tài nguyên.');
+        if (Number(response.headers.get('Content-Length')) > 131072) {
+          await response.body?.cancel();
+          throw new Error('SRT lớn hơn 128 KiB. Tải file để xem đầy đủ.');
+        }
+        const text = await response.text();
+        if (this.assetPreview()?.id === asset.id) this.previewText.set(text);
+      } catch (e) {
+        if (this.assetPreview()?.id === asset.id)
+          this.previewError.set(e instanceof Error ? e.message : 'Không đọc được file.');
+      }
+    }
+  }
+  private downloadJson(value: unknown, name: string) {
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }),
+    );
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  async exportStoryboard() {
+    await this.perform(async () => {
+      await this.storeDocument();
+      const data = await this.api('/projects/' + this.projectId() + '/storyboard/export');
+      this.downloadJson(data, 'flowvideo-storyboard.json');
+      this.notice.set('Đã lưu và xuất storyboard JSON. File không kèm media.');
+    });
+  }
+  async importStoryboard(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    await this.perform(async () => {
+      if (file.size > 2097152) throw new Error('File JSON tối đa 2 MiB.');
+      const content = (await file.text()).replace(/^\uFEFF/, '');
+      try {
+        JSON.parse(content);
+      } catch {
+        throw new Error('File JSON không hợp lệ.');
+      }
+      if (this.projectId() && this.documentLoaded()) await this.storeDocument();
+      const result = await this.api('/storyboards/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: content,
+      });
+      this.projects.update((list) => [result.project, ...list]);
+      await this.selectProject(result.project.id);
+      this.tab.set('board');
+      this.notice.set(
+        'Đã nhập thành dự án mới. Media không đi kèm; hãy chọn lại tư liệu và audio.',
+      );
+    });
+    input.value = '';
   }
   async generateScript() {
     await this.perform(async () => {

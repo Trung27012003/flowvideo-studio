@@ -1,4 +1,4 @@
-# Kiểm chứng bản v0.5
+# Kiểm chứng bản v0.6
 
 Đã chạy trong môi trường Linux với .NET SDK 10.0.403, Node.js 24 và FFmpeg:
 
@@ -40,4 +40,12 @@ Phép đo trước/sau và giới hạn diễn giải xem tại [PERFORMANCE.md]
 - Startup đánh dấu Running Unknown, chỉ tiếp tục Queued. Kiểm tra thiếu key, phiên bản cũ, prompt rỗng và dọn file.
 - Browser dùng capability/image job API mô phỏng để kiểm tra queued/succeeded, chọn ảnh vào cảnh và dựng thật. Không có API key thật hoặc yêu cầu tính phí trong test.
 
-Tổng bộ integration tests hiện có 26 trường hợp. Chưa kiểm chứng chất lượng ảnh/quyền model/độ trễ thực tế bằng tài khoản OpenAI của người dùng.
+Tổng bộ integration tests hiện có 38 trường hợp. Chưa kiểm chứng chất lượng ảnh/quyền model/độ trễ thực tế bằng tài khoản OpenAI của người dùng.
+
+## Đợt 10 chức năng
+
+- JSON export/import: giữ script/prompt/options, đổi project/scene IDs, bỏ mọi media/audio reference và start; dữ liệu gốc giữ nguyên. JSON sai cấu trúc, profile không hợp lệ và file quá 2 MiB không tạo project.
+- Tương thích default của JSON document/job cũ; từ chối resolution ngoài 720/1080 và gain ngoài 0–2.
+- Render 1920×1080 thật, xuất SRT hai cảnh đúng timeline và không hiện SRT ở job không có phụ đề.
+- Đo RMS PCM sau render voice-only, music-only và mix: gain 25% tạo mức tín hiệu khoảng 1/4 so với 100%.
+- Browser: tìm không dấu, lọc, preview video/audio/image/SRT, Escape/focus modal, clone ID riêng, preset, lưu gain, download JSON/import thành project mới, SRT download, kiểm tra responsive.
