@@ -37,7 +37,8 @@ public record StoryDocument(
     double FadeSeconds = 0,
     bool DuckMusic = false,
     RenderEffects? Effects = null,
-    CaptionStyle? Captions = null
+    CaptionStyle? Captions = null,
+    AudioTuning? Audio = null
 );
 
 public record SaveDocument(int Version, StoryDocument Document);
@@ -198,7 +199,8 @@ public static class Storyboard
             FadeSeconds: document.FadeSeconds,
             DuckMusic: document.DuckMusic,
             Effects: document.Effects,
-            Captions: document.Captions
+            Captions: document.Captions,
+            Audio: document.Audio
         );
     }
 
@@ -218,6 +220,8 @@ public static class Storyboard
         CancellationToken ct
     )
     {
+        if (doc.Audio is not null && !doc.Audio.Valid())
+            return "Tùy chỉnh âm thanh không hợp lệ.";
         if (doc.Captions is not null && !doc.Captions.Valid())
             return "Kiểu phụ đề không hợp lệ.";
         if (doc.Effects is not null && !doc.Effects.Valid())

@@ -1,3 +1,4 @@
+import { AudioOptions, defaultAudioTuning } from './audio-options';
 import { CaptionOptions, defaultCaptionStyle } from './caption-options';
 import { SceneOptionsEditor, SceneOptions, defaultSceneOptions } from './scene-options';
 import { RenderOptions, defaultEffects } from './render-options';
@@ -29,7 +30,7 @@ export interface SceneDraft {
 }
 @Component({
   selector: 'app-storyboard',
-  imports: [FormsModule, RenderOptions, SceneOptionsEditor, CaptionOptions],
+  imports: [FormsModule, RenderOptions, SceneOptionsEditor, CaptionOptions, AudioOptions],
   templateUrl: './storyboard.html',
   styleUrl: './storyboard.scss',
 })
@@ -38,6 +39,7 @@ export class StoryboardEditor {
   ratio = model('9:16');
   voiceId = model('');
   musicId = model('');
+  audioTuning = model(defaultAudioTuning());
   autoCaptions = model(true);
   subtitleStyle = model(defaultCaptionStyle());
   activeCount = computed(() => this.scenes().filter((s) => s.options?.enabled !== false).length);

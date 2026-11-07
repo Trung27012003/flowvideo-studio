@@ -314,6 +314,9 @@ public sealed class AudioApp : WebApplicationFactory<Program>
     public string Video => Path.Combine(Data, "fixture.mp4");
     public HttpMessageHandler? ImageHandler;
     public int ImageLimit = 10;
+    public HttpMessageHandler? VideoHandler;
+    public bool VideoKey;
+    public int VideoLimit = 5;
     public int Calls;
     public string SpeechBody = "";
     public string TranscriptionBody = "";
@@ -369,6 +372,8 @@ public sealed class AudioApp : WebApplicationFactory<Program>
                         { "STUDIO_DATA", Data },
                         { "OPENAI_API_KEY", key ? "test-key-not-real" : "" },
                         { "IMAGE_DAILY_LIMIT", ImageLimit.ToString() },
+                        { "GEMINI_API_KEY", VideoKey ? "gemini-test-key" : "" },
+                        { "VIDEO_DAILY_LIMIT", VideoLimit.ToString() },
                     }
                 )
         );
@@ -376,6 +381,8 @@ public sealed class AudioApp : WebApplicationFactory<Program>
         {
             s.AddHttpClient("OpenAiAudio")
                 .ConfigurePrimaryHttpMessageHandler(() => new FakeAudio(this));
+            s.AddHttpClient("GeminiVideo")
+                .ConfigurePrimaryHttpMessageHandler(() => VideoHandler ?? new RejectImage());
             s.AddHttpClient("OpenAiImage")
                 .ConfigurePrimaryHttpMessageHandler(() => ImageHandler ?? new RejectImage());
         });

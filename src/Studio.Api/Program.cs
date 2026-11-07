@@ -22,6 +22,12 @@ builder.Services.AddSingleton<ImageIntake>();
 builder.Services.AddHttpClient("OpenAiImage", client => client.Timeout = TimeSpan.FromSeconds(90));
 builder.Services.AddScoped<ImageProvider>();
 builder.Services.AddHostedService<ImageWorker>();
+builder.Services.AddSingleton<VideoIntake>();
+builder
+    .Services.AddHttpClient("GeminiVideo", client => client.Timeout = TimeSpan.FromMinutes(5))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddScoped<VideoProvider>();
+builder.Services.AddHostedService<VideoWorker>();
 var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
@@ -29,6 +35,7 @@ using (var scope = app.Services.CreateScope())
     await db.Database.EnsureCreatedAsync();
     await Storyboard.Upgrade(db);
     await ImageFeatures.Upgrade(db);
+    await VideoFeatures.Upgrade(db);
     await WorkspaceWorkflow.Upgrade(db);
     await LibraryTools.Upgrade(db);
     await db
@@ -40,14 +47,14 @@ using (var scope = app.Services.CreateScope())
 }
 app.UseDefaultFiles();
 app.UseStaticFiles();
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.10.0" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.12.0" }));
 app.MapGet(
     "/api/capabilities",
     (IConfiguration c) =>
         new
         {
             scriptAi = !string.IsNullOrWhiteSpace(c["OPENAI_API_KEY"]),
-            aiVideo = false,
+            aiVideo = !string.IsNullOrWhiteSpace(c["GEMINI_API_KEY"]),
             imageAi = !string.IsNullOrWhiteSpace(c["OPENAI_API_KEY"]),
             tts = !string.IsNullOrWhiteSpace(c["OPENAI_API_KEY"]),
             transcription = !string.IsNullOrWhiteSpace(c["OPENAI_API_KEY"]),
@@ -187,7 +194,8 @@ app.MapPost(
         if (!await db.Projects.AnyAsync(x => x.Id == id))
             return Results.NotFound();
         if (
-            (req.Captions is not null && !req.Captions.Valid())
+            (req.Audio is not null && !req.Audio.Valid())
+            || (req.Captions is not null && !req.Captions.Valid())
             || (req.Effects is not null && !req.Effects.Valid())
             || req.Fit is not ("contain" or "cover")
             || !double.IsFinite(req.FadeSeconds)
@@ -433,11 +441,13 @@ app.MapPost(
 app.MapAudio();
 app.MapStoryboard();
 app.MapImages();
+app.MapVideos();
 app.MapProjectTools();
 app.MapWorkspaceTools();
 app.MapMediaTools();
 app.MapWorkspaceWorkflow();
 app.MapLibraryTools();
+app.MapJobDeliveries();
 app.Map("/api/{**path}", () => Results.NotFound());
 app.MapFallbackToFile("index.html");
 static bool HasAudio(string json)

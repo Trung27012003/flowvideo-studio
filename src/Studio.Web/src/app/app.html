@@ -68,7 +68,7 @@
         ></span
       >
       <div class="header-right">
-        <span class="pill">MVP v0.10</span
+        <span class="pill">MVP v0.12</span
         ><select
           aria-label="Chọn dự án"
           [ngModel]="projectId()"
@@ -156,6 +156,7 @@
         } @else {
           <div class="studio-grid">
             <section class="panel settings">
+              <app-audio-options [(tuning)]="audioTuning" [disabled]="busy()" />
               <app-caption-options [(style)]="captionStyle" [disabled]="busy()" />
               <app-render-options [(options)]="effects" [disabled]="busy()" />
               <div class="panel-title">
@@ -406,6 +407,57 @@
                 Video của bạn sẽ xuất hiện ở đây sau khi bấm Tạo & chạy.
               </div>
             }
+          </section>
+          <section class="panel delivery-panel">
+            <details>
+              <summary>Công cụ bản xuất</summary>
+              <div class="subtitle-toolbar">
+                <label
+                  >Bản xuất cho công cụ<select
+                    aria-label="Bản xuất cho công cụ"
+                    [(ngModel)]="deliveryJob"
+                  >
+                    <option value="">Chọn job hoàn tất</option>
+                    @for (j of jobs(); track j.id) {
+                      @if (j.status === 'Succeeded') {
+                        <option [value]="j.id">Video {{ j.id.slice(0, 8) }}</option>
+                      }
+                    }
+                  </select></label
+                ><label
+                  >Mốc poster/GIF (s)<input
+                    type="number"
+                    min="0"
+                    max="600"
+                    step="0.1"
+                    [(ngModel)]="deliveryAt" /></label
+                ><label
+                  >Thời lượng GIF (s)<input
+                    type="number"
+                    min="0.1"
+                    max="10"
+                    step="0.1"
+                    [(ngModel)]="deliveryDuration"
+                /></label>
+              </div>
+              <div class="subtitle-actions">
+                <button (click)="inspectDelivery()" [disabled]="busy() || !deliveryJob">
+                  Thông số bản xuất
+                </button>
+                @for (tool of deliveryTools; track tool.kind) {
+                  <button (click)="downloadDelivery(tool.kind)" [disabled]="busy() || !deliveryJob">
+                    {{ tool.label }}
+                  </button>
+                }
+              </div>
+              <p class="hint">
+                Công cụ xử lý tối đa 60 giây; GIF tối đa 10 giây. WAV/FLAC stereo 48 kHz. MP4 nguồn
+                cho bản tắt tiếng/gói ZIP tối đa 100 MiB; file tải tối đa 150 MiB.
+              </p>
+              @if (deliveryInfo()) {
+                <pre class="subtitle-report" role="status">{{ deliveryInfo() }}</pre>
+              }
+            </details>
           </section>
           @if (preview()) {
             <section class="panel preview">
@@ -742,8 +794,22 @@
             </details>
           </section>
           @for (session of [boardSession()]; track session) {
+            <app-video-studio
+              [scenes]="scenes()"
+              [assets]="assets()"
+              [rows]="videoJobs()"
+              [enabled]="videoEnabled()"
+              [disabled]="busy() || !documentLoaded()"
+              [used]="videoUsed()"
+              [limit]="videoLimit()"
+              [ratio]="boardRatio()"
+              (generate)="generateVideos($event)"
+              (cancel)="cancelVideo($event)"
+              (apply)="applyVideo($event)"
+            />
             <app-storyboard
               [(scenes)]="scenes"
+              [(audioTuning)]="boardAudioTuning"
               [(subtitleStyle)]="boardSubtitleStyle"
               (exportSelected)="exportSceneSelection($event)"
               (renderVariants)="renderVariants()"
@@ -900,6 +966,56 @@
             <details class="batch-tools" open>
               <summary>Công cụ phụ đề hàng loạt</summary>
               <div class="subtitle-toolbar">
+                <button (click)="subtitleTool('sentence')" [disabled]="busy()">
+                  Viết hoa đầu câu SRT</button
+                ><button (click)="subtitleTool('punctuation')" [disabled]="busy()">
+                  Sửa khoảng cách dấu câu SRT</button
+                ><button (click)="subtitleTool('emoji')" [disabled]="busy()">
+                  Bỏ emoji trong SRT</button
+                ><button (click)="subtitleTool('csv')" [disabled]="busy()">Xuất SRT CSV</button>
+              </div>
+              <div class="subtitle-toolbar">
+                <label
+                  >Đầu đoạn SRT (s)<input
+                    type="number"
+                    min="0"
+                    max="600"
+                    step="0.1"
+                    [(ngModel)]="subtitleRangeStart" /></label
+                ><label
+                  >Cuối đoạn SRT (s)<input
+                    type="number"
+                    min="0.1"
+                    max="600"
+                    step="0.1"
+                    [(ngModel)]="subtitleRangeEnd" /></label
+                ><button (click)="subtitleTool('range')" [disabled]="busy()">
+                  Lấy đoạn SRT về mốc 0
+                </button>
+              </div>
+              <div class="subtitle-toolbar">
+                <label
+                  >Cách ghép SRT<select aria-label="Cách ghép SRT" [(ngModel)]="subtitleMergeMode">
+                    <option value="append">Nối sau câu cuối</option>
+                    <option value="timeline">Giữ mốc của hai file</option>
+                  </select></label
+                ><label
+                  >Khoảng nghỉ nối SRT (s)<input
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="0.1"
+                    [(ngModel)]="subtitleMergeGap" /></label
+                ><label class="secondary import-file"
+                  >Ghép thêm file SRT<input
+                    type="file"
+                    accept=".srt,text/plain"
+                    aria-label="Ghép thêm file SRT"
+                    (change)="mergeSubtitleFile($event)"
+                    [disabled]="busy()"
+                /></label>
+              </div>
+              <div class="subtitle-toolbar">
                 <button (click)="subtitleTool('sort')" [disabled]="busy()">
                   Sắp lại thứ tự câu SRT</button
                 ><button (click)="subtitleTool('overlaps')" [disabled]="busy()">
@@ -936,6 +1052,13 @@
                     Bản chụp {{ subtitleRows().length }} câu tại lúc bấm xem; hiển thị tối đa 200
                     câu đầu.
                   </p>
+                  <label
+                    >Tìm trong bảng SRT<input
+                      type="search"
+                      [ngModel]="subtitleTableQuery()"
+                      (ngModelChange)="subtitleTableQuery.set($event)"
+                  /></label>
+                  <p>{{ filteredSubtitleRows().length }} câu khớp</p>
                   <table>
                     <thead>
                       <tr>
@@ -945,11 +1068,11 @@
                       </tr>
                     </thead>
                     <tbody>
-                      @for (cue of subtitleRows().slice(0, 200); track $index) {
+                      @for (row of filteredSubtitleRows().slice(0, 200); track row.index) {
                         <tr>
-                          <td>{{ $index + 1 }}</td>
-                          <td>{{ formatCue(cue.start) }} → {{ formatCue(cue.end) }}</td>
-                          <td>{{ cue.text }}</td>
+                          <td>{{ row.index + 1 }}</td>
+                          <td>{{ formatCue(row.cue.start) }} → {{ formatCue(row.cue.end) }}</td>
+                          <td>{{ row.cue.text }}</td>
                         </tr>
                       }
                     </tbody>
@@ -1075,23 +1198,23 @@
       }
       @if (tab() === 'roadmap') {
         <section class="panel roadmap">
-          <h2>Đã hoạt động trong v0.10</h2>
+          <h2>Đã hoạt động trong v0.12</h2>
           <p>
-            v0.10 thêm tùy chỉnh riêng từng cảnh, kiểu phụ đề, sao chép/đổi tên media hàng loạt,
-            phát hiện file trùng và quản lý yêu thích/nhãn/ghi chú tư liệu. Có tạo cảnh từ media và
-            thay tư liệu trên mọi cảnh. Quản lý dự án và media, cắt điểm vào/ra từng clip, ghép
-            ảnh/video, loop trực tiếp, audio từ file, phụ đề SRT, hàng đợi lưu SQLite và tải MP4.
-            Viết kịch bản, tạo giọng đọc và nhận diện phụ đề AI khi có API key. Chỉnh sửa SRT không
-            cần AI.
+            v0.12 thêm tạo video AI từ prompt/ảnh tham chiếu qua Gemini, tạo nhiều cảnh, xử lý
+            giọng/nhạc riêng, công cụ WAV/FLAC/MP4 tắt tiếng/GIF/poster/bảng ảnh/gói giao video và
+            kiểm tra thông số. Có viết hoa đầu câu, dấu câu, bỏ emoji, tìm/lấy đoạn/ghép SRT và xuất
+            CSV. Quản lý dự án và media, cắt điểm vào/ra từng clip, ghép ảnh/video, loop trực tiếp,
+            audio từ file, phụ đề SRT, hàng đợi lưu SQLite và tải MP4. Viết kịch bản, tạo giọng đọc
+            và nhận diện phụ đề AI khi có API key. Chỉnh sửa SRT không cần AI.
           </p>
           <h2>Giai đoạn tiếp theo</h2>
           <p>1. Tự động tạo ảnh và giọng cho toàn storyboard.</p>
-          <p>2. Tạo video AI, ảnh tham chiếu và theo dõi chi phí.</p>
+          <p>2. Sửa/extend video AI, nhiều ảnh tham chiếu và theo dõi chi phí.</p>
           <p>3. Timeline nhiều track và preview proxy (đã có tách đôi cảnh).</p>
           <p>4. Loop crossfade/ping-pong và kiểm tra mối nối.</p>
           <p>5. Cắt video theo transcript và xuất nhiều phiên bản.</p>
           <p class="hint">
-            Tạo video AI, loop liền mạch, editor timeline và đăng mạng xã hội chưa có trong bản này.
+            Loop liền mạch, editor timeline nhiều track và đăng mạng xã hội chưa có trong bản này.
           </p>
         </section>
       }

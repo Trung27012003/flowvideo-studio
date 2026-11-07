@@ -22,7 +22,7 @@ def expect_status(path,code,payload=None,method=None):
     except urllib.error.HTTPError as e:assert e.code==code,(e.code,code)
 def ffmpeg(*args):subprocess.run(['ffmpeg','-y','-hide_banner','-loglevel','error',*args],check=True)
 def start(data,log):
-    env=dict(os.environ,STUDIO_DATA=str(data),OPENAI_API_KEY='')
+    env=dict(os.environ,STUDIO_DATA=str(data),OPENAI_API_KEY='',GEMINI_API_KEY='')
     proc=subprocess.Popen(['dotnet','run','--no-build','--configuration','Release','--project',str(ROOT/'src/Studio.Api'),'--urls','http://127.0.0.1:5097'],cwd=ROOT,env=env,stdout=log,stderr=log)
     for _ in range(100):
         if proc.poll() is not None:raise AssertionError('Backend exited; inspect smoke log')
@@ -134,6 +134,39 @@ with tempfile.TemporaryDirectory(prefix='flowvideo-smoke-') as folder:
             job=request(f'/projects/{p}/renders',{'assetIds':[clip],'duration':1,'ratio':'16:9','subtitleId':sub,'captions':{'size':28,'box':True,'boxColor':'#00ff00','boxOpacity':1,'outline':3,'alignment':5}});wait_job(p,job)
             boxed=folder/'boxed.mp4';urllib.request.urlretrieve(BASE+f'/jobs/{job["id"]}/download',boxed);_,green=caption_pixels(boxed);assert green>500,green
             print('PASS scene speed/brightness/cache/fade/cover-focus/zoom and actual caption color, position, font/bold and background box pixels')
+            # v0.11: decode PCM to validate DSP instead of only checking recipe fields.
+            for name,frequency in [('low',100),('high',5000),('loud',440)]:
+                args=['-f','lavfi','-i',f'sine=frequency={frequency}:sample_rate=48000:duration=2']
+                if name=='loud':args+=['-af','volume=6']
+                ffmpeg(*args,'-c:a','pcm_s16le',str(folder/(name+'.wav')))
+            ffmpeg('-f','lavfi','-i','anoisesrc=color=white:amplitude=0.01:sample_rate=48000:duration=2','-c:a','pcm_s16le',str(folder/'noise.wav'))
+            sources={name:upload(p,folder/(name+'.wav'))['id'] for name in ['low','high','loud','noise']}
+            def audio_job(name,options=None,music=False,duration=2):
+                body={'assetIds':[clip],'mode':'loop','duration':duration,'ratio':'16:9','audio':options or {}}
+                body['musicId' if music else 'voiceId']=sources[name]
+                if music:body['musicGain']=1
+                job=request(f'/projects/{p}/renders',body);wait_job(p,job);output=folder/('dsp-'+job['id']+'.mp4');urllib.request.urlretrieve(BASE+f'/jobs/{job["id"]}/download',output);return output
+            low=audio_job('low');high=audio_job('high');loud=audio_job('loud');noise=audio_job('noise')
+            hp=audio_job('low',{'voiceHighpass':400});lp=audio_job('high',{'voiceLowpass':1000});bass=audio_job('low',{'voiceBass':9});treble=audio_job('high',{'voiceTreble':-9});compressed=audio_job('loud',{'compressVoice':True});cleaned=audio_job('noise',{'denoiseVoice':True})
+            assert audio_rms(hp,.5,.5)<audio_rms(low,.5,.5)*.4
+            assert audio_rms(lp,.5,.5)<audio_rms(high,.5,.5)*.3
+            assert audio_rms(bass,.5,.5)>audio_rms(low,.5,.5)*1.5
+            assert audio_rms(treble,.5,.5)<audio_rms(high,.5,.5)*.7
+            assert audio_rms(compressed,.5,.5)<audio_rms(loud,.5,.5)*.75
+            assert audio_rms(cleaned,.8,.5)<audio_rms(noise,.8,.5)*.8
+            def stereo_rms(file,start,duration):
+                raw=subprocess.check_output(['ffmpeg','-hide_banner','-loglevel','error','-ss',str(start),'-i',str(file),'-t',str(duration),'-map','0:a:0','-ac','2','-ar','16000','-f','f32le','pipe:1'])
+                values=struct.unpack('<'+'f'*(len(raw)//4),raw)
+                return tuple(math.sqrt(sum(v*v for v in values[channel::2])/len(values[channel::2])) for channel in [0,1])
+            pan=audio_job('low',{'voicePan':1});left,right=stereo_rms(pan,.5,.5);assert right>.03 and left<right*.1
+            faded_voice=audio_job('low',{'voiceFadeIn':.5,'voiceFadeOut':.5});assert audio_rms(faded_voice,0,.1)<audio_rms(faded_voice,.8,.2)*.3 and audio_rms(faded_voice,1.9,.1)<audio_rms(faded_voice,.8,.2)*.3
+            music_clip=audio_job('low',{'musicLoop':False,'musicSpeed':2,'musicHighpass':60,'musicLowpass':8000,'musicPan':-1,'musicFadeIn':.2,'musicFadeOut':.2},music=True);left,right=stereo_rms(music_clip,.4,.2);assert left>.03 and right<left*.1
+            assert abs(float(probe(music_clip)['format']['duration'])-2)<.15 and audio_rms(music_clip,1.4,.2)<.003
+            assert audio_rms(music_clip,0,.05)<audio_rms(music_clip,.4,.1)*.4 and audio_rms(music_clip,.95,.05)<audio_rms(music_clip,.4,.1)*.4
+            ffmpeg('-f','lavfi','-i','sine=frequency=100:sample_rate=48000:duration=1','-f','lavfi','-i','sine=frequency=5000:sample_rate=48000:duration=1','-filter_complex','[0:a][1:a]concat=n=2:v=0:a=1[a]','-map','[a]','-c:a','pcm_s16le',str(folder/'trim-voice.wav'))
+            sources['trim']=upload(p,folder/'trim-voice.wav')['id'];trim_voice=audio_job('trim',{'voiceStart':1},duration=1)
+            raw=subprocess.check_output(['ffmpeg','-hide_banner','-loglevel','error','-ss','0.2','-i',str(trim_voice),'-t','0.5','-map','0:a:0','-ac','1','-ar','16000','-f','f32le','pipe:1']);values=struct.unpack('<'+'f'*(len(raw)//4),raw);crossings=sum((a>=0)!=(b>=0) for a,b in zip(values,values[1:]));assert crossings>2000,crossings
+            print('PASS audio DSP: high/low pass, bass/treble, denoise/compressor RMS, stereo balance, voice trim/fades and music speed/nonloop/padding/fades')
             # Trim must select the requested content, not just shorten the output.
             ffmpeg('-f','lavfi','-i','color=c=red:s=320x240:d=1','-f','lavfi','-i','color=c=blue:s=320x240:d=1','-filter_complex','[0:v][1:v]concat=n=2:v=1:a=0[v]','-map','[v]','-c:v','libx264','-pix_fmt','yuv420p',str(folder/'colors.mp4'))
             colors=upload(p,folder/'colors.mp4')['id']

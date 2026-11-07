@@ -6,11 +6,11 @@ Studio video cá nhân bằng **Angular 21 + ASP.NET Core / .NET 10 + FFmpeg**. 
 
 ![Giao diện FlowVideo Studio](docs/studio-preview.png)
 
-## Trạng thái v0.10
+## Trạng thái v0.12
 
-**Đã triển khai:** tạo/chọn dự án; nhập ảnh, video, audio, SRT; chọn và sắp xếp cảnh; cắt điểm vào/ra từng clip; ghép ảnh/video; loop trực tiếp một nguồn; thêm giọng đọc từ file và nhạc nền; burn-in SRT; hàng đợi, hủy job đang chờ/đang chạy, thử lại job lỗi; preview/tải MP4; tạo kịch bản, giọng đọc AI và phụ đề từ lời nói khi cấu hình API key; chỉnh sửa/lưu SRT không cần AI; lưu kịch bản và storyboard theo dự án; dựng theo thời lượng từng cảnh và tạo phụ đề từ lời cảnh; tạo ảnh AI theo prompt từng cảnh với hàng đợi, lịch sử và giới hạn lượt.
+**Đã triển khai:** tạo/chọn dự án; nhập ảnh, video, audio, SRT; chọn và sắp xếp cảnh; cắt điểm vào/ra từng clip; ghép ảnh/video; loop trực tiếp một nguồn; thêm giọng đọc từ file và nhạc nền; burn-in SRT; hàng đợi, hủy job đang chờ/đang chạy, thử lại job lỗi; preview/tải MP4; tạo kịch bản, giọng đọc AI và phụ đề từ lời nói khi cấu hình API key; chỉnh sửa/lưu SRT không cần AI; lưu kịch bản và storyboard theo dự án; dựng theo thời lượng từng cảnh và tạo phụ đề từ lời cảnh; tạo ảnh AI theo prompt từng cảnh với hàng đợi, lịch sử và giới hạn lượt; tạo video AI từ prompt/ảnh tham chiếu qua Gemini, xếp hàng nhiều cảnh và gắn kết quả vào storyboard.
 
-**Chưa triển khai:** sinh video AI, sửa ảnh theo ảnh tham chiếu, editor timeline nhiều track, loop crossfade/ping-pong, đăng mạng xã hội, tự động tạo toàn bộ tư liệu/giọng đọc từ ý tưởng. Các chức năng này được mô tả trong [roadmap](docs/ROADMAP.md), không giả lập kết quả AI.
+**Chưa triển khai:** sửa ảnh theo ảnh tham chiếu, editor timeline nhiều track, loop crossfade/ping-pong, đăng mạng xã hội, tự động tạo toàn bộ tư liệu/giọng đọc từ ý tưởng. Các chức năng này được mô tả trong [roadmap](docs/ROADMAP.md), không giả lập kết quả AI.
 
 ## Chạy phát triển
 
@@ -32,6 +32,12 @@ Tạo dự án → nhập media → chọn cảnh theo thứ tự → chỉnh đ
 Đặt biến môi trường `OPENAI_API_KEY` trong terminal chạy backend; `OPENAI_MODEL` mặc định `gpt-4o-mini`. Không đặt key trong Angular hay commit vào Git. File `.env.example` chỉ là mẫu; ứng dụng **không tự đọc `.env`**. Tạo kịch bản, giọng đọc và nhận diện phụ đề đều có thể phát sinh phí. `OPENAI_TTS_MODEL` mặc định `gpt-4o-mini-tts`; STT dùng `whisper-1` để lấy mốc thời gian. Cần model được tài khoản cho phép sử dụng.
 
 Bấm **Lưu kịch bản** để giữ nội dung theo dự án. Có thể chia các đoạn thành cảnh, chọn tư liệu và dựng bằng storyboard; Ảnh có thể tạo riêng bằng nút AI cho từng cảnh; chưa tự tạo toàn bộ tư liệu cho cả kịch bản.
+
+## Video AI v0.12 và 30 công cụ mới v0.11
+
+**Video AI:** prompt → MP4 qua Google Gemini Interactions API; ảnh tham chiếu, 3–15 giây, 360p/720p/1080p, dọc/ngang, tạo một cảnh hoặc xếp hàng nhiều cảnh, lưu lịch sử, reuse/quota/idempotency, hủy Queued, xem/tải/gắn vào storyboard. Cần `GEMINI_API_KEY`; mặc định `gemini-omni-1.2-flash`, giới hạn 5 lượt/24 giờ. Xem [hướng dẫn, nguồn chính thức và giới hạn kiểm chứng](docs/VIDEO-AI.md). Chưa kiểm tra bằng API key thật; CI không phát sinh phí AI.
+
+**30 công cụ local:** 15 hiệu chỉnh giọng/nhạc (lọc tần số, giảm nhiễu/compressor/EQ, balance, trim/fade, speed và loop nhạc); 8 công cụ bàn giao (WAV/FLAC/mute/GIF/poster/contact sheet/metadata/ZIP có manifest SHA-256); 7 công cụ SRT (sentence/punctuation/search/range/merge/emoji/CSV). Danh sách và cách dùng: [BATCH-V11.md](docs/BATCH-V11.md).
 
 ## Đợt 30 chức năng v0.10
 

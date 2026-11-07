@@ -442,11 +442,28 @@ public static class WorkspaceWorkflow
                                 store.AssetPath(a),
                                 token
                             );
+                            if (kind == "voice" && (doc.Audio?.VoiceStart ?? 0) >= duration)
+                                issues.Add(new("error", "Điểm bắt đầu giọng nằm ngoài nguồn."));
+                            if (
+                                kind == "music"
+                                && doc.Audio?.MusicLoop == false
+                                && (duration - (doc.Effects?.MusicStart ?? 0))
+                                    / (doc.Audio?.MusicSpeed ?? 1)
+                                    < doc.Scenes!.Where(s => s.Options?.Enabled != false)
+                                        .Sum(s => s.Duration)
+                            )
+                                issues.Add(
+                                    new(
+                                        "warning",
+                                        "Nhạc không lặp kết thúc trước hình; phần còn lại im lặng."
+                                    )
+                                );
                             if (kind == "music" && (doc.Effects?.MusicStart ?? 0) >= duration)
                                 issues.Add(new("error", "Điểm bắt đầu nhạc nằm ngoài nguồn."));
                             if (
                                 kind == "voice"
-                                && duration / (doc.Effects?.VoiceSpeed ?? 1)
+                                && (duration - (doc.Audio?.VoiceStart ?? 0))
+                                    / (doc.Effects?.VoiceSpeed ?? 1)
                                     + (doc.Effects?.VoiceDelay ?? 0)
                                     > doc.Scenes!.Where(s => s.Options?.Enabled != false)
                                         .Sum(s => s.Duration) + .1

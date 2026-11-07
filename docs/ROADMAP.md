@@ -98,23 +98,23 @@
 
 - Hàng đợi AI bền vững, tạo lại từng câu và theo dõi chi phí
 - Alignment theo từng từ, editor dạng bảng và xuất ASS
-- Từ điển phát âm, auto-ducking và loudness normalization
+- Từ điển phát âm và tự chọn cấu hình theo nguồn; ducking/loudness/filter/EQ đã có
 
 ## Tiếp theo — tự động hóa storyboard (3–4 tuần)
 
-- AI chia cảnh có cấu trúc, provenance media và lịch sử bản lưu có thể khôi phục
+- AI chia cảnh có cấu trúc và provenance media; checkpoints khôi phục đã có
 - Voice timing quyết định duration thực tế
 - Tự tạo giọng/tư liệu cho từng cảnh, trạng thái từng bước và resume
 - Trần ngân sách; cache kết quả và invalidation khi sửa cảnh
 
-## V0.7 — video AI và ảnh tham chiếu (3–4 tuần)
+## Tiếp theo — sửa video và nhiều ảnh tham chiếu
 
-- Một provider video có API chính thức; image-to-image và ảnh tham chiếu
+- Provider video chính thức đã có ở v0.12; tiếp theo là sửa/extend video và nhiều ảnh tham chiếu
 - Capability matrix; ảnh tham chiếu và hồ sơ nhân vật
 - Hoàn thiện đối soát request và số tiền sử dụng theo provider
 - Tạo lại từng cảnh, lựa chọn kết quả, usage/cost ledger
 
-## V0.8 — editor, loop và clip thông minh (4–6 tuần)
+## Tiếp theo — editor, loop và clip thông minh
 
 - Timeline trim/split/reorder/undo, proxy và render preview
 - Loop crossfade/ping-pong, preview điểm nối và audio loop riêng
@@ -127,3 +127,19 @@
 - Kết nối xuất bản bằng API chính thức sau khi có quyền phù hợp
 
 Thời gian là dự trù cho một dev làm tập trung, cần điều chỉnh sau mỗi giai đoạn. MVP hiện tại chưa thực hiện toàn bộ trải nghiệm một nút bấm đã mô tả ở kế hoạch sản phẩm.
+
+## V0.11 — 30 công cụ audio/bàn giao/SRT đã có
+
+- [x] 15 chỉnh giọng/nhạc lưu cùng document/job/preset.
+- [x] 8 công cụ bản xuất: WAV, FLAC, mute, GIF, poster, contact sheet, thông số, ZIP/SHA-256.
+- [x] 7 công cụ SRT mới. Chi tiết: [BATCH-V11](BATCH-V11.md).
+
+## V0.12 — video AI đã tích hợp
+
+- [x] Gemini Interactions REST, prompt hoặc một ảnh tham chiếu.
+- [x] Duration/resolution/aspect ratio, single/batch queue, cache/quota/idempotency/cancel Queued.
+- [x] Lịch sử bền vững, Unknown không retry, kiểm tra MP4, lưu library, preview/download/apply rõ ràng.
+- [x] Contract tests mô phỏng và render/browser thật; nguồn tham khảo và giới hạn: [VIDEO-AI](VIDEO-AI.md).
+- [ ] Kiểm tra tài khoản/model/chất lượng/giá bằng API key thật của người dùng.
+- [ ] Durable workflow từ ý tưởng → toàn bộ tư liệu + giọng → dựng mà không cần apply từng kết quả.
+- [ ] Loop ping-pong/crossfade; timeline nhiều track; nhiều ảnh tham chiếu và video editing/extension.

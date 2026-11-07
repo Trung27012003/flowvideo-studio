@@ -46,7 +46,8 @@ public record RenderRequest(
     double FadeSeconds = 0,
     bool DuckMusic = false,
     RenderEffects? Effects = null,
-    CaptionStyle? Captions = null
+    CaptionStyle? Captions = null,
+    AudioTuning? Audio = null
 );
 
 public record SceneClip(
@@ -71,10 +72,15 @@ public class StudioDb(DbContextOptions<StudioDb> options) : DbContext(options)
     public DbSet<Asset> Assets => Set<Asset>();
     public DbSet<RenderJob> Jobs => Set<RenderJob>();
     public DbSet<ProjectDocument> ProjectDocuments => Set<ProjectDocument>();
+    public DbSet<VideoGeneration> VideoGenerations => Set<VideoGeneration>();
+
     public DbSet<ImageGeneration> ImageGenerations => Set<ImageGeneration>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<VideoGeneration>().HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId);
+        b.Entity<VideoGeneration>().HasIndex(x => new { x.ProjectId, x.CreatedAt });
+        b.Entity<VideoGeneration>().HasIndex(x => new { x.Status, x.CreatedAt });
         b.Entity<AssetPreference>().HasKey(x => x.AssetId);
         b.Entity<AssetPreference>()
             .HasOne<Asset>()

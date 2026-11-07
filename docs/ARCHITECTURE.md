@@ -107,3 +107,11 @@ CaptionStyle optional trong document/request, shared Angular CaptionOptions cho 
 LibraryTools bổ sung AssetPreferences (AssetId PK/FK, Favorite, TagsJson, Note), upgrade CREATE IF NOT EXISTS. Upsert SQL parameterized đảm bảo không có race insert/update cùng ID; last-write wins. Copy chọn project khác, giới hạn 20 file/100 MiB, GUID/file độc lập, copy metadata và cleanup khi DB commit lỗi. Hash SHA-256 đọc streaming, timeout 30s, không xóa. Bulk rename SaveChanges transaction, giữ extension/StoredName. Usage đọc document/checkpoints/job requests, không draft.
 
 Frontend SceneOptionsEditor dùng focusin/out để gom lịch sử chỉnh một ô; image binding reset speed 1. Metadata/library filters là signals, asset IDs giữ ổn định qua rename. Tạo cảnh từ tập chọn thêm draft, thay source A→B giữ nội dung và reset start. Không thêm upstream AI hoặc dependency runtime.
+
+## v0.11/v0.12: audio, deliveries và video AI
+
+`AudioTuning` thêm vào RenderRequest/StoryDocument dưới trường optional `audio`, default giữ luồng cũ. Worker đặt VoiceStart trước input, lọc giọng rồi speed/gain/fade/delay; nhạc có atempo/filter/balance/fade và apad khi tắt loop. Input metadata được kiểm tra trước khi dùng trim/fades. Audio có hiệu chỉnh dùng 48 kHz. `JobDeliveries` dùng semaphore 2 và timeout 60 giây, dọn thư mục sau response/dispose; bundle ghi recipe/subtitle và manifest SHA-256.
+
+`VideoGenerations` là bảng mới, có index project/created và status/created. `VideoFeatures` intake serialize quota/cache/idempotency; worker claim Queued bằng UPDATE có điều kiện. `VideoProvider` gọi Gemini Interactions qua HttpClient tên GeminiVideo, endpoint cố định, key trong header và không redirect theo URL từ response. `VideoWorker` đọc MP4 bounded, ffprobe validation rồi move file/store asset và trạng thái cùng một SaveChanges; thất bại dọn destination/temp, không persist asset còn tracked. Running lúc startup → Unknown, không lặp yêu cầu có thể đã tính phí.
+
+Frontend VideoStudio tách component; App lưu document trước enqueue, polling có project/request version guard, hiển thị lỗi partial batch. Kết quả không tự đổi bản nháp; apply rõ ràng rồi save/render. JSON/storyboard import không mang history provider sang project khác. Xem VIDEO-AI.md cho hợp đồng và kiểm chứng.

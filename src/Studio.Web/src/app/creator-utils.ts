@@ -241,6 +241,33 @@ export function transformSrt(
         )
         .join(''),
     }));
+  } else if (action === 'sentence') {
+    cues = cues.map((c) => ({ ...c, text: sentenceCase(c.text) }));
+  } else if (action === 'punctuation') {
+    cues = cues.map((c) => ({
+      ...c,
+      text: c.text
+        .split(/(https?:\/\/\S+|www\.\S+|<[^>]*>|\{\\[^}]*\})/g)
+        .map((part) =>
+          /^(https?:\/\/|www\.|<|\{\\)/.test(part)
+            ? part
+            : part.replace(/[ \t]+([,.;:!?])/g, '$1').replace(/([,;:!?])(?=\p{L})/gu, '$1 '),
+        )
+        .join(''),
+    }));
+  } else if (action === 'emoji') {
+    cues = cues.map((c) => ({
+      ...c,
+      text: c.text
+        .replace(/([0-9#*])\uFE0F?\u20E3/gu, '$1')
+        .replace(
+          /\p{Regional_Indicator}{2}|\p{Extended_Pictographic}(?:\uFE0F|\p{Emoji_Modifier})*(?:\u200D\p{Extended_Pictographic}(?:\uFE0F|\p{Emoji_Modifier})*)*/gu,
+          '',
+        )
+        .replace(/\p{Emoji_Modifier}/gu, '')
+        .replace(/[ \t]{2,}/g, ' ')
+        .trim(),
+    }));
   } else throw new Error('Thao tác không hỗ trợ.');
   return writeSrt(cues);
 }
@@ -336,6 +363,74 @@ export function compareDocuments(saved: any, draft: any): string {
     'duckMusic',
     'effects',
     'captions',
+    'audio',
   ].filter((key) => JSON.stringify(saved[key] ?? null) !== JSON.stringify(draft[key] ?? null));
   return `So với mốc: thêm ${added} cảnh, bỏ ${removed} cảnh, sửa ${changed} cảnh.\nThứ tự/danh sách: ${order ? 'khác' : 'giữ nguyên'}.\nTrường khác: ${settings.length ? settings.join(', ') : 'không có'}.`;
+}
+
+function sentenceCase(text: string): string {
+  let upper = true;
+  return text
+    .split(/(<[^>]*>|\{\\[^}]*\})/g)
+    .map((part) => {
+      if (/^(<[^>]*>|\{\\[^}]*\})$/.test(part)) return part;
+      return Array.from(part)
+        .map((char) => {
+          if (/[.!?…\n]/.test(char)) {
+            upper = true;
+            return char;
+          }
+          if (/\p{L}/u.test(char)) {
+            const next = upper ? char.toLocaleUpperCase('vi') : char.toLocaleLowerCase('vi');
+            upper = false;
+            return next;
+          }
+          return char;
+        })
+        .join('');
+    })
+    .join('');
+}
+export function subtitleRange(content: string, start: number, end: number): string {
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end > 600)
+    throw new Error('Đoạn SRT cần đầu >=0, cuối lớn hơn đầu và không quá 600 giây.');
+  const from = Math.round(start * 1000),
+    to = Math.round(end * 1000);
+  const cues = parseSrt(content)
+    .filter((c) => c.end > from && c.start < to)
+    .map((c) => ({ ...c, start: Math.max(c.start, from) - from, end: Math.min(c.end, to) - from }));
+  if (!cues.length) throw new Error('Không có câu trong đoạn đã chọn.');
+  return writeSrt(cues);
+}
+export function mergeSrt(content: string, incoming: string, append: boolean, gap: number): string {
+  if (!Number.isFinite(gap) || gap < 0 || gap > 10)
+    throw new Error('Khoảng nghỉ nối từ 0–10 giây.');
+  const current = content.trim() ? parseSrt(content) : [],
+    next = parseSrt(incoming);
+  const offset =
+    append && current.length
+      ? Math.max(...current.map((c) => c.end)) + Math.round(gap * 1000) - next[0].start
+      : 0;
+  return writeSrt(
+    [...current, ...next.map((c) => ({ ...c, start: c.start + offset, end: c.end + offset }))].sort(
+      (a, b) => a.start - b.start,
+    ),
+  );
+}
+export function subtitleCsv(content: string): string {
+  const cell = (value: string) => {
+    if (/^[\s]*[=+@-]/.test(value)) value = "'" + value;
+    return '"' + value.replace(/"/g, '""') + '"';
+  };
+  return (
+    '\uFEFFindex,start_ms,end_ms,duration_ms,text\r\n' +
+    parseSrt(content)
+      .map((c, i) =>
+        [String(i + 1), String(c.start), String(c.end), String(c.end - c.start), c.text]
+          .map(cell)
+          .join(','),
+      )
+      .join('\r\n') +
+    '\r\n'
+  );
 }

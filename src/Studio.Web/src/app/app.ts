@@ -1,3 +1,5 @@
+import { VideoStudio, VideoRow, VideoRequestOptions } from './video-studio';
+import { AudioOptions, defaultAudioTuning } from './audio-options';
 import { CaptionOptions, defaultCaptionStyle } from './caption-options';
 import { defaultSceneOptions } from './scene-options';
 import { RenderOptions, defaultEffects } from './render-options';
@@ -9,6 +11,9 @@ import {
   parseSrt,
   stamp,
   compareDocuments,
+  subtitleRange,
+  mergeSrt,
+  subtitleCsv,
   Cue,
 } from './creator-utils';
 import {
@@ -41,7 +46,14 @@ interface Job {
 }
 @Component({
   selector: 'app-root',
-  imports: [FormsModule, StoryboardEditor, RenderOptions, CaptionOptions],
+  imports: [
+    FormsModule,
+    StoryboardEditor,
+    RenderOptions,
+    CaptionOptions,
+    AudioOptions,
+    VideoStudio,
+  ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -60,6 +72,11 @@ export class App implements OnInit, OnDestroy {
   subtitles = computed(() => this.assets().filter((a) => a.kind === 'subtitle'));
   media = computed(() => this.assets().filter((a) => a.kind === 'video' || a.kind === 'image'));
   aiEnabled = signal(false);
+  videoEnabled = signal(false);
+  videoJobs = signal<VideoRow[]>([]);
+  videoUsed = signal(0);
+  videoLimit = signal(5);
+  private videoRequestVersion = 0;
   imageEnabled = signal(false);
   imageJobs = signal<ImageRow[]>([]);
   imageUsed = signal(0);
@@ -96,6 +113,33 @@ export class App implements OnInit, OnDestroy {
   bulkPrefix = 'Clip-';
   bulkSuffix = '';
   bulkStart = 1;
+  audioTuning = signal(defaultAudioTuning());
+  boardAudioTuning = signal(defaultAudioTuning());
+  deliveryTools = [
+    { kind: 'wav', label: 'Tải audio WAV' },
+    { kind: 'flac', label: 'Tải audio FLAC' },
+    { kind: 'mute', label: 'Tải MP4 tắt tiếng' },
+    { kind: 'gif', label: 'Tải GIF xem nhanh' },
+    { kind: 'poster', label: 'Tải poster PNG' },
+    { kind: 'contact', label: 'Tải bảng ảnh video' },
+    { kind: 'bundle', label: 'Tải gói giao video ZIP' },
+  ];
+  deliveryJob = '';
+  deliveryAt = 0;
+  deliveryDuration = 3;
+  deliveryInfo = signal('');
+  subtitleTableQuery = signal('');
+  filteredSubtitleRows = computed(() =>
+    this.subtitleRows()
+      .map((cue, index) => ({ cue, index }))
+      .filter((row) =>
+        this.normalized(row.cue.text).includes(this.normalized(this.subtitleTableQuery().trim())),
+      ),
+  );
+  subtitleRangeStart = 0;
+  subtitleRangeEnd = 30;
+  subtitleMergeMode = 'append';
+  subtitleMergeGap = 0.2;
   captionStyle = signal(defaultCaptionStyle());
   boardSubtitleStyle = signal(defaultCaptionStyle());
   librarySelected = signal<string[]>([]);
@@ -225,6 +269,7 @@ export class App implements OnInit, OnDestroy {
       this.projects.set(projects);
       this.aiEnabled.set(capabilities.scriptAi);
       this.imageEnabled.set(capabilities.imageAi);
+      this.videoEnabled.set(capabilities.aiVideo);
       this.speechEnabled.set(capabilities.tts);
       this.transcriptionEnabled.set(capabilities.transcription);
       this.voices.set(capabilities.voices || []);
@@ -241,6 +286,7 @@ export class App implements OnInit, OnDestroy {
     clearTimeout(this.timer);
     if (this.destroyed) return;
     const active =
+      this.videoJobs().some((r) => ['Queued', 'Running'].includes(r.generation.status)) ||
       this.jobs().some((j) => j.status === 'Queued' || j.status === 'Running') ||
       this.imageJobs().some(
         (r) => r.generation.status === 'Queued' || r.generation.status === 'Running',
@@ -249,7 +295,7 @@ export class App implements OnInit, OnDestroy {
     this.timer = setTimeout(async () => {
       if (!document.hidden && this.projectId()) {
         try {
-          await Promise.all([this.refreshJobs(), this.refreshImages()]);
+          await Promise.all([this.refreshJobs(), this.refreshImages(), this.refreshVideos()]);
           this.syncError.set(false);
         } catch {
           if (!this.destroyed) this.syncError.set(true);
@@ -303,6 +349,11 @@ export class App implements OnInit, OnDestroy {
   async selectProject(id: string) {
     const version = ++this.projectVersion;
     this.projectId.set(id);
+    this.audioTuning.set(defaultAudioTuning());
+    this.boardAudioTuning.set(defaultAudioTuning());
+    this.deliveryJob = '';
+    this.deliveryInfo.set('');
+    this.subtitleTableQuery.set('');
     this.assetPreferences.set([]);
     this.favoritesOnly.set(false);
     this.libraryTag.set('');
@@ -350,6 +401,8 @@ export class App implements OnInit, OnDestroy {
     this.assets.set([]);
     this.jobs.set([]);
     this.imageJobs.set([]);
+    this.videoJobs.set([]);
+    this.videoUsed.set(0);
     this.imageUsed.set(0);
     this.selected.set([]);
     this.cuts.set({});
@@ -368,6 +421,7 @@ export class App implements OnInit, OnDestroy {
       }),
       this.refreshJobs(),
       this.refreshImages(),
+      this.refreshVideos(),
       this.refreshSavedItems(),
       this.refreshPreferences(),
       this.api('/projects/' + id + '/document').then((result) => {
@@ -392,6 +446,74 @@ export class App implements OnInit, OnDestroy {
     const jobs = await this.api('/projects/' + id + '/jobs');
     if (id === this.projectId() && version === this.requestVersion && !this.destroyed)
       this.jobs.set(jobs);
+  }
+  async refreshVideos() {
+    const id = this.projectId(),
+      version = ++this.videoRequestVersion;
+    const result = await this.api('/projects/' + id + '/video-generations');
+    if (id !== this.projectId() || version !== this.videoRequestVersion || this.destroyed) return;
+    this.videoJobs.set(result.items);
+    this.videoUsed.set(result.used);
+    this.videoLimit.set(result.dailyLimit);
+    for (const row of result.items as VideoRow[]) if (row.asset) this.addAsset(row.asset);
+  }
+  async generateVideos(options: VideoRequestOptions) {
+    await this.perform(async () => {
+      const version = await this.storeDocument();
+      let count = 0;
+      try {
+        for (const sceneId of options.sceneIds) {
+          await this.api('/projects/' + this.projectId() + '/video-generations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              requestId: crypto.randomUUID(),
+              sceneId,
+              version,
+              seconds: options.seconds,
+              resolution: options.resolution,
+              referenceId: options.referenceId,
+            }),
+          });
+          count++;
+        }
+        this.notice.set(
+          'Đã nhận ' +
+            count +
+            ' yêu cầu video. Kết quả đã có được dùng lại; chọn Dùng video cho cảnh khi sẵn sàng.',
+        );
+      } catch (e) {
+        throw new Error(
+          'Đã nhận ' +
+            count +
+            '/' +
+            options.sceneIds.length +
+            ' yêu cầu. ' +
+            (e instanceof Error ? e.message : 'Không tạo được video.'),
+        );
+      } finally {
+        await this.refreshVideos();
+        this.schedulePoll();
+      }
+    });
+  }
+  async cancelVideo(id: string) {
+    await this.perform(async () => {
+      await this.api('/projects/' + this.projectId() + '/video-generations/' + id + '/cancel', {
+        method: 'POST',
+      });
+      await this.refreshVideos();
+      this.notice.set('Đã hủy video trước khi gửi tới dịch vụ.');
+    });
+  }
+  applyVideo(row: VideoRow) {
+    if (!row.asset) return;
+    this.scenes.update((s) =>
+      s.map((c) =>
+        c.id === row.generation.sceneId ? { ...c, assetId: row.asset!.id, start: 0 } : c,
+      ),
+    );
+    this.notice.set('Đã dùng video trong bản nháp. Bấm Lưu storyboard để giữ.');
   }
   async refreshImages() {
     const id = this.projectId();
@@ -482,6 +604,7 @@ export class App implements OnInit, OnDestroy {
           duckMusic: this.duckMusic,
           effects: this.effects(),
           captions: this.captionStyle(),
+          audio: this.audioTuning(),
           resolution: this.resolution,
           voiceGain: this.voiceVolume / 100,
           musicGain: this.musicVolume / 100,
@@ -594,6 +717,7 @@ export class App implements OnInit, OnDestroy {
       duckMusic: this.boardDuck(),
       effects: this.boardEffects(),
       captions: this.boardSubtitleStyle(),
+      audio: this.boardAudioTuning(),
       resolution: this.boardResolution(),
       voiceGain: this.boardVoiceGain(),
       musicGain: this.boardMusicGain(),
@@ -612,6 +736,7 @@ export class App implements OnInit, OnDestroy {
     this.boardDuck.set(doc.duckMusic ?? false);
     this.boardEffects.set({ ...defaultEffects(), ...doc.effects });
     this.boardSubtitleStyle.set({ ...defaultCaptionStyle(), ...doc.captions });
+    this.boardAudioTuning.set({ ...defaultAudioTuning(), ...doc.audio });
     this.boardResolution.set(doc.resolution ?? 720);
     this.boardVoiceGain.set(doc.voiceGain ?? 1);
     this.boardMusicGain.set(doc.musicGain ?? 0.18);
@@ -630,6 +755,7 @@ export class App implements OnInit, OnDestroy {
       duckMusic: doc.duckMusic,
       effects: doc.effects,
       captions: doc.captions,
+      audio: doc.audio,
     });
   }
   async refreshSavedItems() {
@@ -1036,6 +1162,22 @@ export class App implements OnInit, OnDestroy {
     this.error.set('');
     this.notice.set('');
     try {
+      if (action === 'range') {
+        this.subtitleContent = subtitleRange(
+          this.subtitleContent,
+          this.subtitleRangeStart,
+          this.subtitleRangeEnd,
+        );
+        this.notice.set('Đã lấy đoạn SRT và dịch mốc về 0; hãy lưu bản mới.');
+        return;
+      }
+      if (action === 'csv') {
+        this.downloadBlob(
+          new Blob([subtitleCsv(this.subtitleContent)], { type: 'text/csv;charset=utf-8' }),
+          'flowvideo-subtitles.csv',
+        );
+        return;
+      }
       if (action === 'report') {
         this.subtitleReport.set(subtitleAnalysis(this.subtitleContent));
         return;
@@ -1259,6 +1401,61 @@ export class App implements OnInit, OnDestroy {
     ]);
     this.tab.set('board');
     this.notice.set('Đã thêm ' + media.length + ' cảnh từ tư liệu chọn. Bấm Lưu để giữ.');
+  }
+  async mergeSubtitleFile(event: Event) {
+    const input = event.target as HTMLInputElement,
+      file = input.files?.[0];
+    if (!file) return;
+    await this.perform(async () => {
+      if (file.size > 102400) throw new Error('File SRT tối đa 100 KiB.');
+      this.subtitleContent = mergeSrt(
+        this.subtitleContent,
+        await file.text(),
+        this.subtitleMergeMode === 'append',
+        this.subtitleMergeGap,
+      );
+      this.notice.set('Đã ghép vào bản nháp SRT. Kiểm tra timeline rồi lưu bản mới.');
+    });
+    input.value = '';
+  }
+  async inspectDelivery() {
+    if (!this.deliveryJob) return;
+    await this.perform(async () => {
+      const info = await this.api('/jobs/' + this.deliveryJob + '/media-info');
+      this.deliveryInfo.set(
+        `${info.duration.toFixed(3)} giây · ${(info.bytes / 1048576).toFixed(2)} MiB\n${info.width}×${info.height} · ${info.frameRate} fps · ${info.videoCodec}\nAudio: ${info.audioCodec || 'không có'} · ${info.channels || 0} kênh · ${info.sampleRate || 0} Hz`,
+      );
+    });
+  }
+  async downloadDelivery(kind: string) {
+    if (!this.deliveryJob) return;
+    await this.perform(async () => {
+      const response = await fetch(
+        '/api/jobs/' +
+          this.deliveryJob +
+          '/deliver/' +
+          kind +
+          '?at=' +
+          this.deliveryAt +
+          '&duration=' +
+          this.deliveryDuration,
+        { signal: AbortSignal.any([this.controller.signal, AbortSignal.timeout(90000)]) },
+      );
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.error || result.detail || 'Không xuất được file.');
+      }
+      const extension =
+        kind === 'mute'
+          ? 'mp4'
+          : kind === 'bundle'
+            ? 'zip'
+            : ['poster', 'contact'].includes(kind)
+              ? 'png'
+              : kind;
+      this.downloadBlob(await response.blob(), 'flowvideo-' + kind + '.' + extension);
+      this.notice.set('Đã xuất ' + kind + '.');
+    });
   }
   async generateScript() {
     await this.perform(async () => {

@@ -69,6 +69,7 @@ async function waitForJobs(page, project, predicate) {
           ...process.env,
           STUDIO_DATA: path.join(temp, "data"),
           OPENAI_API_KEY: "",
+          GEMINI_API_KEY: "",
         },
         stdio: ["ignore", "pipe", "pipe"],
       },
@@ -505,7 +506,7 @@ async function waitForJobs(page, project, predicate) {
     await page.route("**/api/capabilities", async (route) => {
       const response = await route.fetch();
       const caps = await response.json();
-      await route.fulfill({ json: { ...caps, imageAi: true } });
+      await route.fulfill({ json: { ...caps, imageAi: true, aiVideo: true } });
     });
     await page.route(
       "**/api/projects/" + projectId + "/image-generations",
@@ -1732,6 +1733,11 @@ async function waitForJobs(page, project, predicate) {
     await board
       .getByLabel("Nguồn cần thay", { exact: true })
       .selectOption(sourceAsset.id);
+    const speedBeforeReplace = await board
+      .locator(".scene")
+      .first()
+      .getByLabel("Tốc độ hình cảnh", { exact: true })
+      .inputValue();
     const imageReplacement = reusableAssets.find((a) => a.kind === "image");
     assert(imageReplacement);
     await board
@@ -1784,7 +1790,10 @@ async function waitForJobs(page, project, predicate) {
     assert.equal(rebound.document.scenes.length, 5);
     assert(!rebound.document.scenes.some((s) => s.assetId === sourceAsset.id));
     assert.equal(rebound.document.captions.size, 24);
-    assert.equal(rebound.document.scenes[0].options.speed, 2);
+    assert.equal(
+      rebound.document.scenes[0].options.speed,
+      Number(speedBeforeReplace),
+    );
     const oldUsage = await (
       await page.request.get(
         "http://127.0.0.1:5099/api/projects/" +
@@ -1805,6 +1814,362 @@ async function waitForJobs(page, project, predicate) {
     console.log(
       "PASS v0.10 browser: 10 scene controls, 10 caption style settings, real styled render/disabled scene/per-scene captions, favorites/tags/notes/filter, usage, byte duplicates, bulk rename, project copy with preferences, scenes from selection and binding replacement",
     );
+    // v0.11 audio DSP, delivery artifacts and subtitle finishing.
+    await board.locator("app-audio-options summary").click();
+    for (const [label, value] of [
+      ["Lọc trầm giọng Hz (0 tắt)", "80"],
+      ["Lọc cao giọng Hz (0 tắt)", "12000"],
+      ["Bass giọng dB", "3"],
+      ["Treble giọng dB", "-2"],
+      ["Cân kênh giọng (-1 trái / 1 phải)", "0.4"],
+      ["Cắt đầu giọng (s)", "0.1"],
+      ["Fade vào giọng (s)", "0.2"],
+      ["Fade ra giọng (s)", "0.2"],
+      ["Tốc độ nhạc", "1.2"],
+      ["Lọc trầm nhạc Hz (0 tắt)", "100"],
+      ["Lọc cao nhạc Hz (0 tắt)", "10000"],
+      ["Cân kênh nhạc (-1 trái / 1 phải)", "-0.3"],
+      ["Fade vào nhạc (s)", "0.2"],
+      ["Fade ra nhạc (s)", "0.2"],
+    ])
+      await board
+        .getByLabel(label + " · Storyboard", { exact: true })
+        .fill(value);
+    await board
+      .getByLabel("Giảm nhiễu giọng · Storyboard", { exact: true })
+      .check();
+    await board
+      .getByLabel("Nén động giọng · Storyboard", { exact: true })
+      .check();
+    await board
+      .getByLabel("Lặp nhạc nền · Storyboard", { exact: true })
+      .uncheck();
+    const beforeAudio = await (
+      await page.request.get(
+        "http://127.0.0.1:5099/api/projects/" + clonedProject + "/jobs",
+      )
+    ).json();
+    await board
+      .getByRole("button", { name: "Lưu & dựng storyboard", exact: true })
+      .click();
+    await page
+      .getByRole("heading", { name: "Hàng đợi render", exact: true })
+      .waitFor();
+    const audioJobs = await waitForJobs(page, clonedProject, (jobs) =>
+      jobs.some(
+        (j) =>
+          !beforeAudio.some((old) => old.id === j.id) &&
+          j.status === "Succeeded",
+      ),
+    );
+    const audioJob = audioJobs.find(
+      (j) => !beforeAudio.some((old) => old.id === j.id),
+    );
+    const audioRecipe = await (
+      await page.request.get(
+        "http://127.0.0.1:5099/api/jobs/" + audioJob.id + "/recipe",
+      )
+    ).json();
+    assert.equal(audioRecipe.request.audio.voiceHighpass, 80);
+    assert.equal(audioRecipe.request.audio.denoiseVoice, true);
+    assert.equal(audioRecipe.request.audio.compressVoice, true);
+    assert.equal(audioRecipe.request.audio.musicLoop, false);
+    assert.equal(audioRecipe.request.audio.voiceStart, 0.1);
+    assert.equal(audioRecipe.request.audio.musicSpeed, 1.2);
+    const delivery = page.locator(".delivery-panel");
+    await delivery.locator("summary").click();
+    await delivery
+      .getByLabel("Bản xuất cho công cụ", { exact: true })
+      .selectOption(audioJob.id);
+    await delivery
+      .getByLabel("Mốc poster/GIF (s)", { exact: true })
+      .fill("0.1");
+    await delivery
+      .getByLabel("Thời lượng GIF (s)", { exact: true })
+      .fill("0.6");
+    await delivery
+      .getByRole("button", { name: "Thông số bản xuất", exact: true })
+      .click();
+    await delivery.getByRole("status").filter({ hasText: "Audio:" }).waitFor();
+    const deliveryCases = [
+      ["Tải audio WAV", "wav"],
+      ["Tải audio FLAC", "flac"],
+      ["Tải MP4 tắt tiếng", "mp4"],
+      ["Tải GIF xem nhanh", "gif"],
+      ["Tải poster PNG", "png"],
+      ["Tải bảng ảnh video", "png"],
+      ["Tải gói giao video ZIP", "zip"],
+    ];
+    for (const [label, extension] of deliveryCases) {
+      const event = page.waitForEvent("download", { timeout: 120000 });
+      await delivery.getByRole("button", { name: label, exact: true }).click();
+      const download = await event;
+      assert(download.suggestedFilename().endsWith("." + extension));
+      const file = await download.path();
+      assert((await fs.stat(file)).size > 100);
+      if (extension === "mp4") {
+        const probe = JSON.parse(
+          execFileSync(
+            "ffprobe",
+            [
+              "-v",
+              "error",
+              "-show_entries",
+              "stream=codec_type",
+              "-of",
+              "json",
+              file,
+            ],
+            { encoding: "utf8" },
+          ),
+        );
+        assert(!probe.streams.some((s) => s.codec_type === "audio"));
+      }
+      if (extension === "wav" || extension === "flac") {
+        const probe = JSON.parse(
+          execFileSync(
+            "ffprobe",
+            [
+              "-v",
+              "error",
+              "-select_streams",
+              "a:0",
+              "-show_entries",
+              "stream=codec_name,sample_rate,channels",
+              "-of",
+              "json",
+              file,
+            ],
+            { encoding: "utf8" },
+          ),
+        );
+        assert.equal(probe.streams[0].sample_rate, "48000");
+        assert.equal(probe.streams[0].channels, 2);
+      }
+      if (extension === "zip") {
+        execFileSync("python3", [
+          "-c",
+          'import zipfile,sys,json,hashlib; z=zipfile.ZipFile(sys.argv[1]); m=json.loads(z.read("manifest.json")); assert "video.mp4" in z.namelist(); assert all(hashlib.sha256(z.read(f["name"])).hexdigest().upper()==f["sha256"] for f in m["files"])',
+          file,
+        ]);
+      }
+    }
+    await page
+      .getByRole("button", { name: "Giọng đọc & phụ đề", exact: true })
+      .click();
+    await page
+      .getByLabel("Nội dung SRT", { exact: true })
+      .fill(
+        "1\n00:00:00,000 --> 00:00:02,000\nxIN ,chào!bạn 🙂\n\n2\n00:00:02,500 --> 00:00:05,000\nvÂNG ,đÚNG.",
+      );
+    await page
+      .getByRole("button", { name: "Viết hoa đầu câu SRT", exact: true })
+      .click();
+    await page.waitForFunction(() =>
+      document.querySelector(".srt-content").value.includes("Xin ,chào!Bạn"),
+    );
+    await page
+      .getByRole("button", { name: "Sửa khoảng cách dấu câu SRT", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Bỏ emoji trong SRT", exact: true })
+      .click();
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector(".srt-content")
+          .value.includes("Xin, chào! Bạn") &&
+        !document.querySelector(".srt-content").value.includes("🙂"),
+    );
+    await page
+      .getByRole("button", { name: "Xem bảng timeline SRT", exact: true })
+      .click();
+    await page.getByLabel("Tìm trong bảng SRT", { exact: true }).fill("xin");
+    await page.waitForFunction(
+      () => document.querySelectorAll(".timeline-table tbody tr").length === 1,
+    );
+    await page.getByLabel("Tìm trong bảng SRT", { exact: true }).fill("");
+    const csvDownload = page.waitForEvent("download");
+    await page
+      .getByRole("button", { name: "Xuất SRT CSV", exact: true })
+      .click();
+    const csvFile = await csvDownload;
+    assert(
+      (await fs.readFile(await csvFile.path(), "utf8")).startsWith(
+        "\uFEFFindex,start_ms",
+      ),
+    );
+    await page.getByLabel("Đầu đoạn SRT (s)", { exact: true }).fill("0.5");
+    await page.getByLabel("Cuối đoạn SRT (s)", { exact: true }).fill("3");
+    await page
+      .getByRole("button", { name: "Lấy đoạn SRT về mốc 0", exact: true })
+      .click();
+    await page.waitForFunction(() =>
+      document
+        .querySelector(".srt-content")
+        .value.includes("00:00:00,000 --> 00:00:01,500"),
+    );
+    const incomingSrt = path.join(temp, "append.srt");
+    await fs.writeFile(
+      incomingSrt,
+      "1\n00:00:01,000 --> 00:00:02,000\nThêm lời",
+    );
+    await page
+      .getByLabel("Cách ghép SRT", { exact: true })
+      .selectOption("append");
+    await page
+      .getByLabel("Ghép thêm file SRT", { exact: true })
+      .setInputFiles(incomingSrt);
+    await page.waitForFunction(() =>
+      document
+        .querySelector(".srt-content")
+        .value.includes("00:00:02,700 --> 00:00:03,700"),
+    );
+    await page
+      .getByRole("button", { name: "Xem bảng timeline SRT", exact: true })
+      .click();
+    await page.waitForFunction(
+      () => document.querySelectorAll(".timeline-table tbody tr").length === 3,
+    );
+    await page.getByRole("button", { name: "Storyboard", exact: true }).click();
+    await board.locator("app-audio-options summary").click();
+    assert.equal(
+      await board
+        .getByLabel("Cắt đầu giọng (s) · Storyboard", { exact: true })
+        .inputValue(),
+      "0.1",
+    );
+    console.log(
+      "PASS v0.11 browser: 15 audio controls persisted and rendered; WAV/FLAC/mute/GIF/poster/contact/bundle downloads and metadata; subtitle sentence/punctuation/emoji/table search/range/merge/CSV",
+    );
+    // Provider responses are mocked; media, document saving, and video downloads use the real API.
+    const videoRows = [],
+      videoRequests = [];
+    const videoEndpoint =
+      "**/api/projects/" + clonedProject + "/video-generations";
+    await page.route(videoEndpoint, async (route) => {
+      if (route.request().method() === "POST") {
+        const body = route.request().postDataJSON();
+        videoRequests.push(body);
+        const row = {
+          generation: {
+            id: body.requestId,
+            sceneId: body.sceneId,
+            prompt: "Video fixture",
+            status: videoRequests.length === 1 ? "Succeeded" : "Queued",
+            message: "Contract fixture",
+            model: "gemini-omni-1.2-flash",
+            size: "9:16",
+            quality: body.resolution,
+            seconds: body.seconds,
+          },
+          asset: videoRequests.length === 1 ? sourceAsset : null,
+        };
+        videoRows.unshift(row);
+        await route.fulfill({
+          status: 202,
+          json: { generation: row.generation, reused: false },
+        });
+      } else
+        await route.fulfill({
+          json: { items: videoRows, dailyLimit: 5, used: videoRequests.length },
+        });
+    });
+    await page.route(videoEndpoint + "/*/cancel", async (route) => {
+      const id = route.request().url().split("/").at(-2);
+      videoRows.find((r) => r.generation.id === id).generation.status =
+        "Canceled";
+      await route.fulfill({ json: { canceled: true } });
+    });
+    await board
+      .getByLabel("Ghi chú hình ảnh / prompt", { exact: true })
+      .first()
+      .fill("A teal room with a slow camera movement");
+    const videoPanel = page.locator("app-video-studio");
+    await videoPanel.locator("summary").click();
+    await videoPanel
+      .getByLabel("Thời lượng video AI (s)", { exact: true })
+      .fill("7");
+    await videoPanel
+      .getByLabel("Độ phân giải video AI", { exact: true })
+      .selectOption("1080p");
+    await videoPanel
+      .getByLabel("Ảnh tham chiếu video AI", { exact: true })
+      .selectOption(imageReplacement.id);
+    await videoPanel
+      .getByRole("button", { name: /^Tạo video AI ·/ })
+      .first()
+      .click();
+    await videoPanel
+      .getByRole("button", { name: "Dùng video cho cảnh", exact: true })
+      .waitFor();
+    assert.equal(videoRequests.length, 1);
+    assert.equal(videoRequests[0].seconds, 7);
+    assert.equal(videoRequests[0].resolution, "1080p");
+    assert.equal(videoRequests[0].referenceId, imageReplacement.id);
+    assert(videoRequests[0].version > 0);
+    const aiVideoDownload = page.waitForEvent("download");
+    await videoPanel
+      .getByRole("link", { name: "Tải video AI", exact: true })
+      .click();
+    const aiVideoPath = await (await aiVideoDownload).path();
+    assert.deepEqual(
+      await fs.readFile(aiVideoPath),
+      await (
+        await page.request.get(
+          "http://127.0.0.1:5099/api/assets/" + sourceAsset.id + "/file",
+        )
+      ).body(),
+    );
+    await videoPanel
+      .getByRole("button", { name: "Dùng video cho cảnh", exact: true })
+      .click();
+    await board
+      .getByRole("button", { name: "Lưu storyboard", exact: true })
+      .click();
+    await page
+      .getByRole("status")
+      .filter({ hasText: "Đã lưu kịch bản và storyboard" })
+      .waitFor();
+    const videoDocument = await (
+      await page.request.get(
+        "http://127.0.0.1:5099/api/projects/" + clonedProject + "/document",
+      )
+    ).json();
+    assert.equal(
+      videoDocument.document.scenes.find(
+        (s) => s.id === videoRequests[0].sceneId,
+      ).assetId,
+      sourceAsset.id,
+    );
+    await videoPanel
+      .getByRole("button", { name: /^Xếp hàng video cho/ })
+      .click();
+    await videoPanel
+      .getByRole("button", { name: "Hủy video chưa gửi", exact: true })
+      .first()
+      .waitFor();
+    assert(videoRequests.length > 1);
+    const countBeforeCancel = videoRequests.length;
+    await videoPanel
+      .getByRole("button", { name: "Hủy video chưa gửi", exact: true })
+      .first()
+      .click();
+    await page
+      .getByRole("status")
+      .filter({ hasText: "Đã hủy video trước khi gửi" })
+      .waitFor();
+    assert.equal(videoRequests.length, countBeforeCancel);
+    assert(videoRows.some((r) => r.generation.status === "Canceled"));
+    await videoPanel.getByText("Đã hủy", { exact: true }).waitFor();
+    await page.screenshot({
+      path: path.join(root, "test-results/video-ai.png"),
+      fullPage: true,
+    });
+    console.log(
+      "PASS v0.12 browser: AI video controls, save-before-submit, reference, single/batch queue, explicit apply, real MP4 download, queued cancellation; mocked provider contract",
+    );
+
     await page.evaluate(() => scrollTo(0, 0));
     await page.screenshot({
       path: path.join(root, "test-results/imported.png"),

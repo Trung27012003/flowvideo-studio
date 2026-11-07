@@ -95,14 +95,16 @@ public record RenderEffects(
         return string.Join(',', filters);
     }
 
-    public string VoiceFilter(double gain)
+    public string VoiceFilter(double gain, AudioTuning? audio = null, double duration = 0)
     {
-        var filters = new List<string>();
+        audio ??= new AudioTuning();
+        var filters = audio.VoiceFilters();
         if (VoiceSpeed != 1)
             filters.Add($"atempo={N(VoiceSpeed)}");
         if (NormalizeVoice)
             filters.Add("loudnorm=I=-16:TP=-1.5:LRA=11");
         filters.Add($"volume={N(gain)}");
+        AudioTuning.Fades(filters, audio.VoiceFadeIn, audio.VoiceFadeOut, duration);
         if (VoiceDelay > 0)
             filters.Add($"adelay={Math.Round(VoiceDelay * 1000)}:all=1");
         filters.Add("apad");

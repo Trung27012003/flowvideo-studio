@@ -1,4 +1,4 @@
-# Kiểm chứng bản v0.10
+# Kiểm chứng bản v0.12
 
 Đã chạy trong môi trường Linux với .NET SDK 10.0.403, Node.js 24 và FFmpeg:
 
@@ -40,7 +40,7 @@ Phép đo trước/sau và giới hạn diễn giải xem tại [PERFORMANCE.md]
 - Startup đánh dấu Running Unknown, chỉ tiếp tục Queued. Kiểm tra thiếu key, phiên bản cũ, prompt rỗng và dọn file.
 - Browser dùng capability/image job API mô phỏng để kiểm tra queued/succeeded, chọn ảnh vào cảnh và dựng thật. Không có API key thật hoặc yêu cầu tính phí trong test.
 
-Tổng bộ integration tests hiện có 65 trường hợp. Chưa kiểm chứng chất lượng ảnh/quyền model/độ trễ thực tế bằng tài khoản OpenAI của người dùng.
+Tổng bộ integration tests hiện có 85 trường hợp. Chưa kiểm chứng chất lượng ảnh/quyền model/độ trễ thực tế bằng tài khoản OpenAI của người dùng.
 
 ## Đợt 10 chức năng
 
@@ -93,3 +93,26 @@ Không gọi AI trả phí. Sinh video AI vẫn chưa được triển khai ho�
 - 17 test Node vẫn kiểm tra utility/SRT/compare, có trường captions trong phép so sánh cấu hình mới.
 
 Không gọi AI trả phí. Tạo video AI vẫn chưa có trong đợt v0.10.
+
+## v0.11: audio, bàn giao và SRT
+
+- 6 integration tests mới: validation trên cả document/render, persist/import/clone/checkpoint/preset và default cũ; filter graph render thật; 7 định dạng bàn giao/metadata và ZIP SHA-256; lỗi nguồn không audio/khoảng sai/giới hạn file; non-loop nhạc không cắt ngắn video; kiểm tra trim giọng và dọn file.
+- Node tổng 22 tests: thêm sentence/punctuation bảo vệ tag/URL, emoji Unicode, range clamp/rebase, merge append/timeline, CSV chống công thức.
+- Smoke dùng tín hiệu tổng hợp và đo audio thực: high/low-pass, bass/treble, compressor/denoise RMS, cân bằng kênh, fade giọng/nhạc, tốc độ và non-loop/padding, cắt đầu giọng chọn đúng tone. Kế thừa các kiểm tra pixel/metadata của những bản trước.
+- Browser chỉnh đủ nhóm audio, kiểm tra recipe/lưu lại, tải WAV/FLAC/mute/GIF/poster/contact/bundle, ffprobe kênh/sample rate, giải ZIP đối chiếu manifest SHA-256; thao tác 7 công cụ SRT.
+
+## v0.12: video AI
+
+14 trường hợp integration mới (5 Fact và 9 nhánh Theory):
+
+- Đúng endpoint/header/model/input/response_format REST Google; response đọc steps/model_output/video, không dùng shortcut SDK.
+- File H.264 thực → ffprobe → asset → gắn rõ ràng → render thật. Prompt document không bị worker ghi đè.
+- Cùng RequestId không replay; cùng fingerprint reuse trước quota; khác prompt khi hết quota bị chặn.
+- Ảnh base64 đúng byte/MIME, scope project; phiên bản cũ/options sai/key thiếu không gọi provider hoặc giữ hàng đợi rác.
+- JSON sai, MP4 không hợp lệ, container hỏng, response quá giới hạn, HTTP từ chối, HTTP 5xx, lỗi mạng/IO và chưa completed đều đi đúng Failed/Unknown, không tự gửi lại và không để asset/temp rác.
+- Startup Running → Unknown, giữ Queued; hủy Queued và kiểm tra scope/not-found/terminal conflict.
+- Browser: single/batch, duration/resolution/reference, lưu trước submit, apply + lưu document thật, download MP4 đúng byte, cancel Queued và mobile layout; provider/queue video được mô phỏng.
+
+Tổng .NET 85, Node 22. Các lệnh xác minh: `dotnet test tests/Studio.Api.Tests -c Release`, `npm run build --prefix src/Studio.Web`, `npm run test:tools --prefix src/Studio.Web`, `python3 scripts/smoke.py`, `node scripts/browser-smoke.cjs` (có Chromium và SDK trong PATH). CI chạy toàn bộ và đóng gói ứng dụng/ảnh chụp.
+
+Không có yêu cầu AI trả phí trong tests. Chưa kiểm tra Google/OpenAI bằng key thật: quyền model, hóa đơn, độ trễ và chất lượng tạo sinh còn cần tài khoản người dùng. Các phép đo DSP/codec/file chỉ chứng minh pipeline local và hợp đồng tích hợp. Xem [VIDEO-AI](VIDEO-AI.md) cho nguồn tham khảo chính thức.

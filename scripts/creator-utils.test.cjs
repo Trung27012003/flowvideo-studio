@@ -256,3 +256,74 @@ test("checkpoint comparison reports changed, removed, added scenes and settings"
     ).includes("captions"),
   );
 });
+
+test("sentence capitalization and punctuation retain tags and protect URLs", () => {
+  const input = writeSrt([
+    { start: 0, end: 1000, text: "<b>xIN CHÀO</b>!tỐT chỨ? vÂNG." },
+  ]);
+  assert.equal(
+    parseSrt(transformSrt(input, "sentence", 0))[0].text,
+    "<b>Xin chào</b>!Tốt chứ? Vâng.",
+  );
+  const punctuation = writeSrt([
+    {
+      start: 0,
+      end: 1000,
+      text: "Xin ,chào!bạn;đẹp:quá https://example.com?a=b www.example.com/a?b=c 1,000",
+    },
+  ]);
+  const result = parseSrt(transformSrt(punctuation, "punctuation", 0))[0].text;
+  assert(result.includes("Xin, chào! bạn; đẹp: quá"));
+  assert(result.includes("https://example.com?a=b"));
+  assert(result.includes("1,000"));
+});
+test("emoji cleanup preserves numeric text and nonemoji joiners, rejects an empty cue", () => {
+  const input = writeSrt([
+    { start: 0, end: 1000, text: "Xin 👨‍👩‍👧‍👦 chào 🇻🇳 👍🏽 1️⃣ test क्‍ष" },
+  ]);
+  const result = parseSrt(transformSrt(input, "emoji", 0))[0].text;
+  assert.equal(result, "Xin chào 1 test क्‍ष");
+  assert.throws(() =>
+    transformSrt(writeSrt([{ start: 0, end: 1000, text: "🙂" }]), "emoji", 0),
+  );
+});
+test("subtitle range intersects cues and shifts the selected timeline to zero", () => {
+  const {
+    subtitleRange,
+  } = require("../src/Studio.Web/src/app/creator-utils.ts");
+  const input = writeSrt([
+    { start: 0, end: 2000, text: "A" },
+    { start: 2500, end: 5000, text: "B" },
+    { start: 6000, end: 7000, text: "C" },
+  ]);
+  assert.deepEqual(parseSrt(subtitleRange(input, 1, 4)), [
+    { start: 0, end: 1000, text: "A" },
+    { start: 1500, end: 3000, text: "B" },
+  ]);
+  assert.throws(() => subtitleRange(input, 8, 9));
+  assert.throws(() => subtitleRange(input, 3, 2));
+});
+test("merge append aligns first imported cue and timeline mode retains original timestamps", () => {
+  const { mergeSrt } = require("../src/Studio.Web/src/app/creator-utils.ts");
+  const incoming = writeSrt([{ start: 10000, end: 11000, text: "C" }]);
+  const appended = parseSrt(mergeSrt(source, incoming, true, 0.2));
+  assert.equal(appended.at(-1).start, 3200);
+  assert.equal(appended.at(-1).end, 4200);
+  const timeline = parseSrt(mergeSrt(source, incoming, false, 0));
+  assert.equal(timeline.at(-1).start, 10000);
+  assert.throws(() => mergeSrt(source, incoming, true, -1));
+  assert.equal(parseSrt(mergeSrt("", incoming, true, 0)).length, 1);
+});
+test("subtitle CSV quotes multilingual content and neutralizes spreadsheet formulas", () => {
+  const { subtitleCsv } = require("../src/Studio.Web/src/app/creator-utils.ts");
+  const csv = subtitleCsv(
+    writeSrt([
+      { start: 0, end: 1234, text: "=SUM(1,2)" },
+      { start: 1500, end: 2000, text: 'Xin, "chào"' },
+    ]),
+  );
+  assert(csv.startsWith("\uFEFFindex,start_ms"));
+  assert(csv.includes('"\'=SUM(1,2)"'));
+  assert(csv.includes('"Xin, ""chào"""'));
+  assert(csv.includes('"1234"'));
+});

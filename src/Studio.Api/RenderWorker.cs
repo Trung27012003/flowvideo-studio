@@ -124,6 +124,7 @@ public class RenderWorker(
     {
         var req = JsonSerializer.Deserialize<RenderRequest>(job.RequestJson)!;
         var effects = req.Effects ?? new RenderEffects();
+        var audio = req.Audio ?? new AudioTuning();
         var needed = req
             .AssetIds.Concat(new[] { req.VoiceId, req.MusicId, req.SubtitleId }.OfType<Guid>())
             .Distinct()
@@ -280,27 +281,52 @@ public class RenderWorker(
                 );
                 final.AddRange(["-f", "concat", "-safe", "0", "-i", "list.txt"]);
             }
+            var endTime = req.Mode == "loop" ? req.Duration : Math.Min(req.Duration, elapsed);
+            double voiceDuration = 0,
+                musicDuration = endTime;
             int audioIndex = 1;
             int? voiceIndex = null,
                 musicIndex = null;
             if (req.VoiceId is Guid voice)
             {
                 voiceIndex = audioIndex++;
+                if (audio.VoiceStart > 0 || audio.VoiceFadeIn > 0 || audio.VoiceFadeOut > 0)
+                {
+                    var duration = await MediaProcess.AudioDuration(
+                        store.AssetPath(assets[voice]),
+                        ct
+                    );
+                    if (audio.VoiceStart >= duration)
+                        throw new IOException("Voice start exceeds source duration.");
+                    voiceDuration = Math.Max(
+                        0,
+                        Math.Min(
+                            (duration - audio.VoiceStart) / effects.VoiceSpeed,
+                            endTime - effects.VoiceDelay
+                        )
+                    );
+                }
+                if (audio.VoiceStart > 0)
+                    final.AddRange(["-ss", Number(audio.VoiceStart)]);
                 final.AddRange(["-i", store.AssetPath(assets[voice])]);
             }
             if (req.MusicId is Guid music)
             {
                 musicIndex = audioIndex++;
-                if (effects.MusicStart > 0)
+                if (effects.MusicStart > 0 || !audio.MusicLoop || audio.MusicFadeOut > 0)
                 {
                     var duration = await MediaProcess.AudioDuration(
                         store.AssetPath(assets[music]),
                         ct
                     );
+                    musicDuration = audio.MusicLoop
+                        ? endTime
+                        : Math.Min(endTime, (duration - effects.MusicStart) / audio.MusicSpeed);
                     if (effects.MusicStart >= duration)
                         throw new IOException("Music start exceeds source duration.");
                 }
-                final.AddRange(["-stream_loop", "-1"]);
+                if (audio.MusicLoop)
+                    final.AddRange(["-stream_loop", "-1"]);
                 if (effects.MusicStart > 0)
                     final.AddRange(["-ss", Number(effects.MusicStart)]);
                 final.AddRange(["-i", store.AssetPath(assets[music])]);
@@ -316,7 +342,7 @@ public class RenderWorker(
             {
                 File.Copy(store.AssetPath(assets[sub]), Path.Combine(temp, "captions.srt"), true);
             }
-            var endTime = req.Mode == "loop" ? req.Duration : Math.Min(req.Duration, elapsed);
+
             var fade = Math.Min(req.FadeSeconds, endTime / 2);
             var videoFilters = new List<string>();
             if (hasCaptions)
@@ -342,21 +368,21 @@ public class RenderWorker(
             if (voiceIndex is int vi && musicIndex is int mi)
             {
                 var mixer = req.DuckMusic
-                    ? $"[{vi}:a]{effects.VoiceFilter(req.VoiceGain)},asplit=2[v][side];[{mi}:a]volume={Number(req.MusicGain)}[m];[m][side]sidechaincompress=threshold=0.02:ratio=8:attack=20:release=300[duck];[v][duck]amix=inputs=2:duration=longest:normalize=0,{limiter}{audioFade}[a]"
-                    : $"[{vi}:a]{effects.VoiceFilter(req.VoiceGain)}[v];[{mi}:a]volume={Number(req.MusicGain)}[m];[v][m]amix=inputs=2:duration=longest:normalize=0,{limiter}{audioFade}[a]";
+                    ? $"[{vi}:a]{effects.VoiceFilter(req.VoiceGain, audio, voiceDuration)},asplit=2[v][side];[{mi}:a]{audio.MusicFilter(req.MusicGain, musicDuration)}[m];[m][side]sidechaincompress=threshold=0.02:ratio=8:attack=20:release=300[duck];[v][duck]amix=inputs=2:duration=longest:normalize=0,{limiter}{audioFade}[a]"
+                    : $"[{vi}:a]{effects.VoiceFilter(req.VoiceGain, audio, voiceDuration)}[v];[{mi}:a]{audio.MusicFilter(req.MusicGain, musicDuration)}[m];[v][m]amix=inputs=2:duration=longest:normalize=0,{limiter}{audioFade}[a]";
                 final.AddRange(["-filter_complex", mixer, "-map", "[a]"]);
             }
             else if (voiceIndex is int v)
                 final.AddRange([
                     "-af",
-                    $"{effects.VoiceFilter(req.VoiceGain)},{limiter}{audioFade}",
+                    $"{effects.VoiceFilter(req.VoiceGain, audio, voiceDuration)},{limiter}{audioFade}",
                     "-map",
                     $"{v}:a",
                 ]);
             else if (musicIndex is int m)
                 final.AddRange([
                     "-af",
-                    $"volume={Number(req.MusicGain)},{limiter}{audioFade}",
+                    $"{audio.MusicFilter(req.MusicGain, musicDuration)},{limiter}{audioFade}",
                     "-map",
                     $"{m}:a",
                 ]);
@@ -378,7 +404,10 @@ public class RenderWorker(
                     "-pix_fmt",
                     "yuv420p",
                 ]);
-            if (effects.NormalizeVoice && req.VoiceId is not null)
+            if (
+                (effects.NormalizeVoice || audio.VoiceChanged()) && req.VoiceId is not null
+                || audio.MusicChanged() && req.MusicId is not null
+            )
                 final.AddRange(["-ar", "48000"]);
             if (effects.Mono)
                 final.AddRange(["-ac", "1"]);

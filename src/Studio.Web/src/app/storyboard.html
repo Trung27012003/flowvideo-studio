@@ -135,6 +135,11 @@
         nhạc khi có giọng storyboard</label
       >
     </div>
+    <app-audio-options
+      [(tuning)]="audioTuning"
+      context="Storyboard"
+      [disabled]="disabled() || working()"
+    />
     <app-caption-options
       [(style)]="subtitleStyle"
       context="Storyboard"

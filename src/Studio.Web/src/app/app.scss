@@ -791,3 +791,15 @@ dd {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+
+.delivery-panel {
+  margin-top: 24px;
+}
+.delivery-panel summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+.delivery-panel button {
+  font-size: 12px;
+}
