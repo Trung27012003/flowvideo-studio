@@ -7,7 +7,17 @@ namespace Studio;
 
 public static class MediaProcess
 {
-    public static async Task<double> Duration(string path, CancellationToken ct)
+    public static Task<double> Duration(string path, CancellationToken ct) =>
+        ProbeDuration(path, "v:0", ct);
+
+    public static Task<double> AudioDuration(string path, CancellationToken ct) =>
+        ProbeDuration(path, "a:0", ct);
+
+    private static async Task<double> ProbeDuration(
+        string path,
+        string selector,
+        CancellationToken ct
+    )
     {
         var json = await Run(
             "ffprobe",
@@ -15,7 +25,7 @@ public static class MediaProcess
                 "-v",
                 "error",
                 "-select_streams",
-                "v:0",
+                selector,
                 "-show_entries",
                 "stream=duration:format=duration",
                 "-of",
@@ -26,6 +36,11 @@ public static class MediaProcess
             ct
         );
         using var doc = JsonDocument.Parse(json);
+        if (
+            !doc.RootElement.TryGetProperty("streams", out var available)
+            || available.GetArrayLength() == 0
+        )
+            throw new IOException("Requested media stream not found.");
         if (
             doc.RootElement.TryGetProperty("streams", out var streams)
             && streams.GetArrayLength() > 0

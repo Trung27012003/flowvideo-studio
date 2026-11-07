@@ -14,6 +14,8 @@ builder.Services.AddDbContext<StudioDb>(
 builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = 262144000);
 builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 262144000);
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient("OpenAiAudio", client => client.Timeout = TimeSpan.FromSeconds(90));
+builder.Services.AddScoped<AudioProvider>();
 builder.Services.AddSingleton<JobControl>();
 builder.Services.AddHostedService<RenderWorker>();
 var app = builder.Build();
@@ -30,7 +32,7 @@ using (var scope = app.Services.CreateScope())
 }
 app.UseDefaultFiles();
 app.UseStaticFiles();
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.2.0" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.3.0" }));
 app.MapGet(
     "/api/capabilities",
     (IConfiguration c) =>
@@ -38,7 +40,9 @@ app.MapGet(
         {
             scriptAi = !string.IsNullOrWhiteSpace(c["OPENAI_API_KEY"]),
             aiVideo = false,
-            tts = false,
+            tts = !string.IsNullOrWhiteSpace(c["OPENAI_API_KEY"]),
+            transcription = !string.IsNullOrWhiteSpace(c["OPENAI_API_KEY"]),
+            voices = AudioProvider.Voices,
         }
 );
 app.MapGet(
@@ -357,6 +361,9 @@ app.MapPost(
         }
     }
 );
+app.MapAudio();
 app.Map("/api/{**path}", () => Results.NotFound());
 app.MapFallbackToFile("index.html");
 app.Run();
+
+public partial class Program { }

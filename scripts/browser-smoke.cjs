@@ -139,6 +139,48 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       await page.getByRole("button", { name: "✧ Viết kịch bản" }).isDisabled(),
       true,
     );
+    await page.getByRole("button", { name: /Giọng đọc & phụ đề/ }).click();
+    assert.equal(
+      await page
+        .getByRole("button", { name: "Tạo giọng đọc AI", exact: true })
+        .isDisabled(),
+      true,
+    );
+    assert.equal(
+      await page
+        .getByRole("button", { name: "Nhận diện & tạo SRT" })
+        .isDisabled(),
+      true,
+    );
+    await page
+      .getByLabel("Phụ đề có sẵn")
+      .selectOption({ label: "sample.srt" });
+    await page.getByRole("button", { name: "Mở phụ đề" }).click();
+    await page.waitForFunction(() =>
+      document.querySelector(".srt-content")?.value.includes("Xin chào"),
+    );
+    await page.getByLabel("Tên bản mới").fill("Phụ đề đã sửa");
+    await page
+      .getByLabel("Nội dung SRT")
+      .fill("1\n00:00:00,000 --> 00:00:01,000\nNội dung đã sửa");
+    await page.getByRole("button", { name: "Lưu bản phụ đề" }).click();
+    await page
+      .getByRole("status")
+      .filter({ hasText: "Đã lưu bản phụ đề mới" })
+      .waitFor();
+    const saved = await page
+      .getByRole("link", { name: "Tải bản đã lưu ↓" })
+      .getAttribute("href");
+    const savedText = await (
+      await page.request.get("http://127.0.0.1:5099" + saved)
+    ).text();
+    assert(savedText.includes("Nội dung đã sửa"));
+    await fs.mkdir(path.join(root, "test-results"), { recursive: true });
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.screenshot({
+      path: path.join(root, "test-results/voice.png"),
+      fullPage: true,
+    });
     await page.getByRole("button", { name: /Studio & render/ }).click();
     await page.setViewportSize({ width: 390, height: 844 });
     assert.equal(
@@ -161,7 +203,7 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     });
     assert.deepEqual(errors, []);
     console.log(
-      "PASS browser: project, upload, trim, real export/preview, cancel, library, AI capability, mobile layout; no JS errors",
+      "PASS browser: project, upload, trim, real export/preview, cancel, library, subtitle editor/download, AI capability, mobile layout; no JS errors",
     );
   } catch (error) {
     console.error(logs);

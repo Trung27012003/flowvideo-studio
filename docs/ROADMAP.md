@@ -16,17 +16,25 @@
 - [x] Polling thích ứng, phản hồi cũ không ghi đè state, hủy fetch khi đóng component
 - [x] Regression tests trim/cancel và browser smoke test trên CI
 
-## V0.3 — chất lượng nền tảng (2–3 tuần)
+## V0.3 — giọng và phụ đề đã bổ sung
+
+- [x] OpenAI TTS, chọn giọng/tốc độ, nghe thử, lưu MP3 và chọn trong Studio
+- [x] Whisper nhận diện audio/video thành SRT có timestamp
+- [x] Editor SRT, kiểm tra mốc/nội dung, lưu bản mới và tải xuống
+- [x] HTTP contract tests dùng provider mô phỏng; render thật với audio/sub đã tạo
+- [x] Browser test editor/download; không gọi API tính phí trong CI
+
+## Tiếp theo — chất lượng nền tảng (2–3 tuần)
 
 - ffprobe kiểm tra file ngay sau upload; duration, thumbnail, waveform
 - EF migrations, giới hạn dung lượng, dọn orphan/temp files
 - Lưu script và preset; theo dõi render progress thực từ FFmpeg
 - Mở rộng API validation tests, accessibility và browser E2E CI
 
-## V0.4 — giọng và phụ đề (2–3 tuần)
+## Tiếp theo — hoàn thiện audio (2–3 tuần)
 
-- Một provider TTS và STT, nghe thử và tạo lại từng câu
-- Timestamp từ provider/alignment; editor subtitle và xuất SRT/ASS
+- Hàng đợi AI bền vững, tạo lại từng câu và theo dõi chi phí
+- Alignment theo từng từ, editor dạng bảng và xuất ASS
 - Từ điển phát âm, auto-ducking và loudness normalization
 
 ## V0.5 — storyboard và một nút bấm (3–4 tuần)

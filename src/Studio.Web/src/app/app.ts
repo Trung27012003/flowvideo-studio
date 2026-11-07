@@ -36,6 +36,23 @@ export class App implements OnInit, OnDestroy {
   subtitles = computed(() => this.assets().filter((a) => a.kind === 'subtitle'));
   media = computed(() => this.assets().filter((a) => a.kind === 'video' || a.kind === 'image'));
   aiEnabled = signal(false);
+  speechEnabled = signal(false);
+  transcriptionEnabled = signal(false);
+  voices = signal<string[]>([]);
+  speechText = '';
+  speechName = 'Lời đọc AI';
+  speechVoice = 'alloy';
+  speechSpeed = 1;
+  speechPreview = signal('');
+  sourceId = '';
+  language = 'vi';
+  subtitleName = 'Phụ đề';
+  subtitleContent = '';
+  subtitleToEdit = '';
+  savedSubtitle = signal<Asset | null>(null);
+  transcriptionSources = computed(() =>
+    this.assets().filter((a) => a.kind === 'audio' || a.kind === 'video'),
+  );
   projectName = '';
   mode = 'concat';
   duration = 30;
@@ -60,6 +77,9 @@ export class App implements OnInit, OnDestroy {
       ]);
       this.projects.set(projects);
       this.aiEnabled.set(capabilities.scriptAi);
+      this.speechEnabled.set(capabilities.tts);
+      this.transcriptionEnabled.set(capabilities.transcription);
+      this.voices.set(capabilities.voices || []);
       if (this.projects().length) await this.selectProject(this.projects()[0].id);
     });
     this.schedulePoll();
@@ -129,6 +149,11 @@ export class App implements OnInit, OnDestroy {
     this.jobs.set([]);
     this.selected.set([]);
     this.cuts.set({});
+    this.speechPreview.set('');
+    this.sourceId = '';
+    this.subtitleToEdit = '';
+    this.subtitleContent = '';
+    this.savedSubtitle.set(null);
     this.preview.set('');
     this.voiceId = '';
     this.musicId = '';
@@ -230,6 +255,75 @@ export class App implements OnInit, OnDestroy {
       await this.api('/jobs/' + id + '/cancel', { method: 'POST' });
       await this.refreshJobs();
       this.schedulePoll();
+    });
+  }
+  private addAsset(asset: Asset) {
+    this.assets.update((assets) => [...assets.filter((a) => a.id !== asset.id), asset]);
+  }
+  async generateSpeech() {
+    await this.perform(async () => {
+      const asset = await this.api('/projects/' + this.projectId() + '/speech', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: this.speechText,
+          voice: this.speechVoice,
+          speed: this.speechSpeed,
+          name: this.speechName,
+        }),
+      });
+      this.addAsset(asset);
+      this.voiceId = asset.id;
+      this.sourceId = asset.id;
+      this.speechPreview.set('/api/assets/' + asset.id + '/file');
+      this.notice.set(
+        'Đã lưu giọng đọc AI vào thư viện và chọn làm giọng lồng tiếng trong Studio.',
+      );
+    });
+  }
+  private async subtitleFile(id: string): Promise<string> {
+    const response = await fetch('/api/assets/' + id + '/file', {
+      signal: AbortSignal.any([this.controller.signal, AbortSignal.timeout(30000)]),
+    });
+    if (!response.ok) throw new Error('Không đọc được file phụ đề.');
+    return response.text();
+  }
+  async transcribe() {
+    await this.perform(async () => {
+      const result = await this.api('/projects/' + this.projectId() + '/transcriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assetId: this.sourceId, language: this.language }),
+      });
+      this.addAsset(result.asset);
+      this.subtitleId = result.asset.id;
+      this.subtitleToEdit = result.asset.id;
+      this.savedSubtitle.set(result.asset);
+      this.subtitleContent = await this.subtitleFile(result.asset.id);
+      this.notice.set(
+        'Đã tạo và lưu phụ đề AI. Hãy kiểm tra nội dung và mốc thời gian trước khi render.',
+      );
+    });
+  }
+  async loadSubtitle() {
+    await this.perform(async () => {
+      this.subtitleContent = await this.subtitleFile(this.subtitleToEdit);
+      this.savedSubtitle.set(this.assets().find((a) => a.id === this.subtitleToEdit) || null);
+    });
+  }
+  async saveSubtitle() {
+    await this.perform(async () => {
+      const result = await this.api('/projects/' + this.projectId() + '/subtitles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: this.subtitleName, content: this.subtitleContent }),
+      });
+      this.addAsset(result.asset);
+      this.subtitleId = result.asset.id;
+      this.subtitleToEdit = result.asset.id;
+      this.savedSubtitle.set(result.asset);
+      this.subtitleContent = await this.subtitleFile(result.asset.id);
+      this.notice.set('Đã lưu bản phụ đề mới và chọn trong Studio. Các bản trước vẫn được giữ.');
     });
   }
   async generateScript() {

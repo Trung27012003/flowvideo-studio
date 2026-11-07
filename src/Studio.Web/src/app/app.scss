@@ -545,3 +545,50 @@ footer span {
   padding: 6px;
   font-size: 11px;
 }
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  color: #b3c3d8;
+  font-size: 11px;
+  margin-bottom: 18px;
+}
+.field input,
+.field select {
+  width: 100%;
+}
+.voice-grid textarea {
+  min-height: 180px;
+  margin: 0;
+}
+.voice-grid audio {
+  display: block;
+  width: 100%;
+  margin: 20px 0;
+}
+.subtitle-editor {
+  margin-top: 24px;
+}
+.subtitle-toolbar {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.subtitle-toolbar .field {
+  flex: 1;
+  min-width: 180px;
+}
+.srt-content {
+  min-height: 300px;
+  width: 100%;
+  font-family: monospace;
+  font-size: 13px;
+}
+.subtitle-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}

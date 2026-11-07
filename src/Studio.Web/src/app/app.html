@@ -13,6 +13,9 @@
     <button [class.active]="tab() === 'script'" (click)="tab.set('script')">
       ✧ <span>Kịch bản AI</span>
     </button>
+    <button [class.active]="tab() === 'voice'" (click)="tab.set('voice')">
+      ♫ <span>Giọng đọc & phụ đề</span>
+    </button>
     <button [class.active]="tab() === 'roadmap'" (click)="tab.set('roadmap')">
       ☷ <span>Lộ trình phát triển</span>
     </button>
@@ -33,12 +36,14 @@
                 ? 'Thư viện'
                 : tab() === 'script'
                   ? 'Kịch bản'
-                  : 'Lộ trình'
+                  : tab() === 'voice'
+                    ? 'Giọng đọc & phụ đề'
+                    : 'Lộ trình'
           }}</b
         ></span
       >
       <div class="header-right">
-        <span class="pill">MVP v0.2</span
+        <span class="pill">MVP v0.3</span
         ><select
           aria-label="Chọn dự án"
           [ngModel]="projectId()"
@@ -61,7 +66,9 @@
               ? 'Tài nguyên cho câu chuyện của bạn.'
               : tab() === 'script'
                 ? 'Bắt đầu bằng một ý tưởng.'
-                : 'Từng bước hoàn thiện studio.'
+                : tab() === 'voice'
+                  ? 'Thêm giọng nói cho câu chuyện.'
+                  : 'Từng bước hoàn thiện studio.'
         }}
       </h1>
       <p class="intro">Studio cá nhân để ghép video, tạo loop, lồng âm thanh và thêm phụ đề.</p>
@@ -360,22 +367,178 @@
           </section>
         </div>
       }
+      @if (tab() === 'voice') {
+        @if (!projectId()) {
+          <section class="panel"><p>Tạo hoặc chọn dự án để lưu giọng đọc và phụ đề.</p></section>
+        } @else {
+          <div class="script-grid voice-grid">
+            <section class="panel">
+              <div class="panel-title">
+                <h2>Tạo giọng đọc AI</h2>
+                <span>TEXT TO SPEECH</span>
+              </div>
+              <label class="field"
+                >Tên giọng đọc<input [(ngModel)]="speechName" maxlength="120"
+              /></label>
+              <label class="field"
+                >Nội dung lời đọc<textarea
+                  [(ngModel)]="speechText"
+                  maxlength="4000"
+                  placeholder="Nhập lời thuyết minh bằng tiếng Việt hoặc ngôn ngữ bạn muốn…"
+                ></textarea>
+              </label>
+              <div class="two">
+                <label class="field"
+                  >Giọng<select [(ngModel)]="speechVoice">
+                    @for (voice of voices(); track voice) {
+                      <option [value]="voice">{{ voice }}</option>
+                    }
+                  </select></label
+                >
+                <label class="field"
+                  >Tốc độ<select [(ngModel)]="speechSpeed">
+                    <option [ngValue]="0.75">0,75×</option>
+                    <option [ngValue]="1">1×</option>
+                    <option [ngValue]="1.25">1,25×</option>
+                    <option [ngValue]="1.5">1,5×</option>
+                  </select></label
+                >
+              </div>
+              <p class="hint">
+                Giọng đọc do AI tạo. Văn bản sẽ được gửi đến OpenAI và có thể tính phí. Tối đa 4.000
+                ký tự/lần; không tự động gửi lại khi lỗi.
+              </p>
+              @if (!speechEnabled()) {
+                <p class="hint">Chưa cấu hình OPENAI_API_KEY ở backend.</p>
+              }
+              <button
+                class="primary"
+                (click)="generateSpeech()"
+                [disabled]="busy() || !speechEnabled() || !speechText.trim() || !speechName.trim()"
+              >
+                Tạo giọng đọc AI
+              </button>
+              @if (speechPreview()) {
+                <audio controls [src]="speechPreview()" aria-label="Nghe giọng đọc AI"></audio>
+                <button class="secondary" (click)="tab.set('studio')">
+                  Dùng giọng trong Studio
+                </button>
+              }
+            </section>
+            <section class="panel">
+              <div class="panel-title">
+                <h2>Tạo phụ đề từ lời nói</h2>
+                <span>SPEECH TO TEXT</span>
+              </div>
+              <label class="field"
+                >Nguồn nhận diện<select [(ngModel)]="sourceId">
+                  <option value="">Chọn audio / video</option>
+                  @for (asset of transcriptionSources(); track asset.id) {
+                    <option [value]="asset.id">{{ asset.name }}</option>
+                  }
+                </select></label
+              >
+              <label class="field"
+                >Ngôn ngữ lời nói<select [(ngModel)]="language">
+                  <option value="vi">Tiếng Việt</option>
+                  <option value="en">Tiếng Anh</option>
+                  <option value="auto">Tự nhận diện</option>
+                </select></label
+              >
+              <p class="hint">
+                Audio được gửi đến OpenAI để nhận diện, có thể tính phí. Tối đa 10 phút/file. Video
+                cần có track âm thanh; toàn bộ nguồn được nhận diện, chưa áp dụng điểm cắt trong
+                Studio.
+              </p>
+              @if (!transcriptionEnabled()) {
+                <p class="hint">Chưa cấu hình OPENAI_API_KEY ở backend.</p>
+              }
+              <button
+                class="primary"
+                (click)="transcribe()"
+                [disabled]="busy() || !transcriptionEnabled() || !sourceId"
+              >
+                Nhận diện & tạo SRT
+              </button>
+              <p class="hint">Phụ đề tạo ra được lưu trong thư viện và có thể sửa ở bên dưới.</p>
+            </section>
+          </div>
+          <section class="panel subtitle-editor">
+            <div class="panel-title">
+              <h2>Chỉnh sửa phụ đề SRT</h2>
+              <span>KHÔNG CẦN AI</span>
+            </div>
+            <div class="subtitle-toolbar">
+              <label class="field"
+                >Phụ đề có sẵn<select [(ngModel)]="subtitleToEdit">
+                  <option value="">Chọn file SRT</option>
+                  @for (asset of subtitles(); track asset.id) {
+                    <option [value]="asset.id">{{ asset.name }}</option>
+                  }
+                </select></label
+              >
+              <button
+                class="secondary"
+                (click)="loadSubtitle()"
+                [disabled]="busy() || !subtitleToEdit"
+              >
+                Mở phụ đề
+              </button>
+              <label class="field"
+                >Tên bản mới<input [(ngModel)]="subtitleName" maxlength="120"
+              /></label>
+            </div>
+            <label class="field"
+              >Nội dung SRT<textarea
+                class="srt-content"
+                [(ngModel)]="subtitleContent"
+                maxlength="100000"
+                placeholder="1&#10;00:00:00,000 --> 00:00:02,000&#10;Xin chào!"
+                spellcheck="false"
+              ></textarea>
+            </label>
+            <p class="hint">
+              Lưu sẽ tạo bản mới và kiểm tra định dạng, thứ tự thời gian. Mốc phụ đề theo file
+              nguồn; nếu cắt/ghép video, hãy chỉnh mốc tương ứng. Bản đang sửa chưa lưu sẽ mất khi
+              đổi dự án hoặc tải lại trang.
+            </p>
+            <div class="subtitle-actions">
+              <button
+                class="primary"
+                (click)="saveSubtitle()"
+                [disabled]="busy() || !subtitleContent.trim() || !subtitleName.trim()"
+              >
+                Lưu bản phụ đề
+              </button>
+              @if (savedSubtitle(); as asset) {
+                <a
+                  class="download"
+                  [href]="'/api/assets/' + asset.id + '/file'"
+                  [download]="asset.name"
+                  >Tải bản đã lưu ↓</a
+                >
+              }
+              <button class="secondary" (click)="tab.set('studio')">Về Studio</button>
+            </div>
+          </section>
+        }
+      }
       @if (tab() === 'roadmap') {
         <section class="panel roadmap">
-          <h2>Đã hoạt động trong v0.2</h2>
+          <h2>Đã hoạt động trong v0.3</h2>
           <p>
             Quản lý dự án và media, cắt điểm vào/ra từng clip, ghép ảnh/video, loop trực tiếp, audio
-            từ file, phụ đề SRT, hàng đợi lưu SQLite và tải MP4. Viết kịch bản AI khi có API key.
+            từ file, phụ đề SRT, hàng đợi lưu SQLite và tải MP4. Viết kịch bản, tạo giọng đọc và
+            nhận diện phụ đề AI khi có API key. Chỉnh sửa SRT không cần AI.
           </p>
           <h2>Giai đoạn tiếp theo</h2>
-          <p>1. Tạo giọng đọc và nhận diện phụ đề qua API.</p>
+          <p>1. Tự động dựng video từ kịch bản, giọng đọc và tư liệu.</p>
           <p>2. Tạo ảnh/video AI từng cảnh, theo dõi request và ngân sách.</p>
           <p>3. Storyboard lưu bền vững, timeline trim/split và preview proxy.</p>
           <p>4. Loop crossfade/ping-pong và kiểm tra mối nối.</p>
           <p>5. Cắt video theo transcript và xuất nhiều phiên bản.</p>
           <p class="hint">
-            Tạo video AI, TTS, loop liền mạch, editor timeline và đăng mạng xã hội chưa có trong bản
-            này.
+            Tạo video AI, loop liền mạch, editor timeline và đăng mạng xã hội chưa có trong bản này.
           </p>
         </section>
       }

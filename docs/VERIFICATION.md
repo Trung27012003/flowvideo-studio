@@ -1,4 +1,4 @@
-# Kiểm chứng bản v0.2
+# Kiểm chứng bản v0.3
 
 Đã chạy trong môi trường Linux với .NET SDK 10.0.403, Node.js 24 và FFmpeg:
 
@@ -18,3 +18,9 @@
 Chưa kiểm chứng gọi OpenAI thực tế, Windows/macOS, tải lớn hoặc nhiều người dùng. Mã nguồn đã được push lên GitHub; trạng thái build và smoke test của từng commit xem tại [GitHub Actions](https://github.com/Trung27012003/flowvideo-studio/actions).
 
 Phép đo trước/sau và giới hạn diễn giải xem tại [PERFORMANCE.md](PERFORMANCE.md).
+
+## Audio/SRT
+
+- HTTP integration tests dùng provider AI mô phỏng: speech request, multipart transcription, audio hợp lệ, timestamp, render với asset tạo ra; thiếu key, đầu vào sai, provider lỗi/malformed, file không có audio, nguồn quá 10 phút và dọn file khi thất bại.
+- Editor SRT kiểm tra BOM/CRLF, chuẩn hóa đánh số, mốc sai, lưu bản mới giữ nguyên bản cũ; browser test mở/sửa/lưu/tải SRT và trạng thái nút AI khi chưa có key.
+- Chưa thực hiện yêu cầu tính phí đến OpenAI; chất lượng giọng, nhận diện tiếng Việt, độ trễ và quyền model thực tế cần kiểm tra bằng tài khoản người dùng.

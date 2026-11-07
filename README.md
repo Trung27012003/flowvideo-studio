@@ -6,11 +6,11 @@ Studio video cá nhân bằng **Angular 21 + ASP.NET Core / .NET 10 + FFmpeg**. 
 
 ![Giao diện FlowVideo Studio](docs/studio-preview.png)
 
-## Trạng thái v0.2
+## Trạng thái v0.3
 
-**Đã triển khai:** tạo/chọn dự án; nhập ảnh, video, audio, SRT; chọn và sắp xếp cảnh; cắt điểm vào/ra từng clip; ghép ảnh/video; loop trực tiếp một nguồn; thêm giọng đọc từ file và nhạc nền; burn-in SRT; hàng đợi, hủy job đang chờ/đang chạy, thử lại job lỗi; preview/tải MP4; tạo kịch bản AI khi cấu hình API key.
+**Đã triển khai:** tạo/chọn dự án; nhập ảnh, video, audio, SRT; chọn và sắp xếp cảnh; cắt điểm vào/ra từng clip; ghép ảnh/video; loop trực tiếp một nguồn; thêm giọng đọc từ file và nhạc nền; burn-in SRT; hàng đợi, hủy job đang chờ/đang chạy, thử lại job lỗi; preview/tải MP4; tạo kịch bản, giọng đọc AI và phụ đề từ lời nói khi cấu hình API key; chỉnh sửa/lưu SRT không cần AI.
 
-**Chưa triển khai:** sinh video/ảnh AI, text-to-speech, speech-to-text, editor timeline nhiều track/split, loop crossfade/ping-pong, đăng mạng xã hội, tự động biến kịch bản thành video. Các chức năng này được mô tả trong [roadmap](docs/ROADMAP.md), không giả lập kết quả AI.
+**Chưa triển khai:** sinh video/ảnh AI, editor timeline nhiều track/split, loop crossfade/ping-pong, đăng mạng xã hội, tự động biến kịch bản thành video. Các chức năng này được mô tả trong [roadmap](docs/ROADMAP.md), không giả lập kết quả AI.
 
 ## Chạy phát triển
 
@@ -29,9 +29,19 @@ Tạo dự án → nhập media → chọn cảnh theo thứ tự → chỉnh đ
 
 ## AI tùy chọn
 
-Đặt biến môi trường `OPENAI_API_KEY` trong terminal chạy backend; `OPENAI_MODEL` mặc định `gpt-4o-mini`. Không đặt key trong Angular hay commit vào Git. File `.env.example` chỉ là mẫu; ứng dụng **không tự đọc `.env`**. Yêu cầu tạo kịch bản có thể phát sinh phí. Cần model được tài khoản cho phép sử dụng.
+Đặt biến môi trường `OPENAI_API_KEY` trong terminal chạy backend; `OPENAI_MODEL` mặc định `gpt-4o-mini`. Không đặt key trong Angular hay commit vào Git. File `.env.example` chỉ là mẫu; ứng dụng **không tự đọc `.env`**. Tạo kịch bản, giọng đọc và nhận diện phụ đề đều có thể phát sinh phí. `OPENAI_TTS_MODEL` mặc định `gpt-4o-mini-tts`; STT dùng `whisper-1` để lấy mốc thời gian. Cần model được tài khoản cho phép sử dụng.
 
 Kịch bản AI hiện chỉ hiển thị trong phiên trình duyệt; hãy sao chép trước khi reload. Nó chưa tự tạo media hay đưa vào hàng đợi dựng.
+
+## Giọng đọc và phụ đề v0.3
+
+Mở **Giọng đọc & phụ đề** sau khi chọn dự án:
+
+- Nhập lời đọc, chọn giọng và tốc độ → **Tạo giọng đọc AI**. Audio MP3 được lưu vào thư viện, có thể nghe thử và được chọn sẵn làm giọng trong Studio.
+- Chọn audio/video có lời nói → chọn ngôn ngữ → **Nhận diện & tạo SRT**. Phụ đề được lưu, mở trong editor và chọn sẵn trong Studio.
+- Mở SRT có sẵn hoặc nhập nội dung trực tiếp → sửa lời/mốc thời gian → **Lưu bản phụ đề**. Mỗi lần lưu tạo một asset mới, giữ nguyên các bản trước. Có thể tải bản đã lưu.
+
+Editor SRT không cần key. AI cần tài khoản có quyền dùng model; đã kiểm thử hợp đồng API bằng provider mô phỏng, chưa kiểm chứng chất lượng AI thực tế bằng key thật. Giới hạn TTS 4.000 ký tự, STT 10 phút/file; xử lý theo request, chưa có hàng đợi AI bền vững. Xem [hướng dẫn audio](docs/AUDIO.md).
 
 ## Quy tắc render hiện tại
 
@@ -39,8 +49,8 @@ Kịch bản AI hiện chỉ hiển thị trong phiên trình duyệt; hãy sao 
 - Cắt clip: nhập điểm vào/ra theo giây trong danh sách cảnh; để trống điểm ra để lấy đến cuối nguồn. Loop lặp phần đã cắt. Điểm vượt thời lượng nguồn sẽ khiến job báo lỗi.
 - Loop: chọn đúng một ảnh/video, lặp trực tiếp đến thời lượng đích; không bảo đảm điểm nối liền mạch.
 - Đầu ra: H.264/AAC MP4, 30 fps, 720×1280 hoặc 1280×720; giữ tỉ lệ nguồn bằng letterbox.
-- Audio gốc của clip bị bỏ. Giọng đọc là file audio đã nhập, không phải TTS. Nhạc nền giảm về 18%, chưa có auto-ducking.
-- SRT phải là UTF-8. Phụ đề được burn-in, chưa có trình sửa sub.
+- Audio gốc của clip bị bỏ. Giọng đọc có thể là file audio đã nhập hoặc MP3 tạo bằng TTS. Nhạc nền giảm về 18%, chưa có auto-ducking.
+- SRT phải là UTF-8. Phụ đề được burn-in; sửa nội dung/mốc thời gian ở màn hình Giọng đọc & phụ đề.
 - Tối đa 250 MB/file, 30 cảnh/job, 600 giây; một worker render tuần tự.
 - Job Queued còn lại được chạy khi mở lại; job Running bị gián đoạn được đánh dấu Failed để thử lại thủ công.
 
@@ -54,6 +64,7 @@ SQLite và media nằm trong `data/` tương đối với backend; có thể đ�
 
 ```bash
 dotnet build src/Studio.Api -c Release
+dotnet test tests/Studio.Api.Tests -c Release
 cd src/Studio.Web && npm ci && npm run build
 cd ../..
 python3 scripts/smoke.py
