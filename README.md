@@ -1,5 +1,7 @@
 # FlowVideo Studio
 
+[![Build and media smoke test](https://github.com/Trung27012003/flowvideo-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/Trung27012003/flowvideo-studio/actions/workflows/ci.yml)
+
 Studio video cá nhân bằng **Angular 21 + ASP.NET Core / .NET 10 + FFmpeg**. Giao diện tiếng Việt, hàng đợi render lưu bền vững và kho media local.
 
 ![Giao diện FlowVideo Studio](docs/studio-preview.png)

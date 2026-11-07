@@ -13,4 +13,4 @@
 - Kiểm tra viewport 390 px không tràn ngang.
 - npm audit với production dependencies: 0 vulnerabilities tại lúc kiểm tra.
 
-Chưa kiểm chứng gọi OpenAI thực tế, Windows/macOS, tải lớn, nhiều người dùng hoặc CI trên GitHub. Repository creation đang bị quyền GitHub integration từ chối (403); workflow chỉ chạy khi mã nguồn được push lên repository có quyền ghi.
+Chưa kiểm chứng gọi OpenAI thực tế, Windows/macOS, tải lớn hoặc nhiều người dùng. Mã nguồn đã được push lên GitHub; trạng thái build và smoke test của từng commit xem tại [GitHub Actions](https://github.com/Trung27012003/flowvideo-studio/actions).
