@@ -226,6 +226,7 @@ public static class ImageFeatures
                         Size = size,
                     };
                     db.ImageGenerations.Add(row);
+                    await AiBudget.Reserve(db, id, row.Id, [new("image", 1)], ct);
                     await db.SaveChangesAsync(ct);
                     return Results.Accepted(
                         $"/api/projects/{id}/image-generations",

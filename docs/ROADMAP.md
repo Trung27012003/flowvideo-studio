@@ -160,5 +160,16 @@ Thời gian là dự trù cho một dev làm tập trung, cần điều chỉnh 
 - [x] Quota/cache/idempotency/usage, queued cancel/restart Unknown, revision/version apply, import/export offline.
 - [x] Technical render QA trước Succeeded, metadata/SRT checks, report/recheck/export.
 - [x] [Hướng dẫn và mức kiểm chứng](STORY-ARCHITECT.md).
-- [ ] Ngân sách tiền/đối soát hóa đơn và backup/restore toàn bộ media/DB.
-- [ ] Character/location reference library, timeline tối thiểu, overlay, word alignment, publishing.
+- [x] v0.15: ngân sách dự toán + đối soát thủ công, backup/restore project kèm media.
+- [ ] Đồng bộ hóa đơn provider, backup toàn DB theo lịch.
+- [x] v0.15: thư viện nhân vật/bối cảnh, text/logo/CTA và chuyển cảnh.
+- [ ] Timeline nhiều track, word alignment, publishing.
+
+## V0.15 — Creative Studio
+
+- [x] CRUD hồ sơ, version/snapshot theo cảnh, mô tả prompt, gói JSON, clone/remap ảnh.
+- [x] Text/logo/CTA có thời gian và vị trí, transition concat giữ thời lượng/phụ đề/giọng.
+- [x] ZIP portable gồm media/metadata/checkpoint/preset, SHA-256, restore nguyên tử sang dự án mới.
+- [x] Đơn giá tự nhập, cap/quote/reservation, cache miễn phí, batch nguyên tử, unknown/reprice/reconcile và xuất sổ JSON.
+- [x] [Hướng dẫn và giới hạn cụ thể](CREATIVE-STUDIO.md).
+- [ ] Consistency ảnh/LoRA, nhiều logo/lớp hình, canvas realtime, transition riêng từng boundary, lịch backup, hóa đơn tự động.

@@ -1,3 +1,11 @@
+import {
+  GraphicsOptions,
+  Branding,
+  Transitions,
+  defaultBranding,
+  defaultTransitions,
+} from './graphics-options';
+import type { Continuity } from './creative-workspace';
 import type { DirectionBlueprint } from './story-architect';
 import { AudioOptions, defaultAudioTuning } from './audio-options';
 import { CaptionOptions, defaultCaptionStyle } from './caption-options';
@@ -29,15 +37,25 @@ export interface SceneDraft {
   start: number;
   options?: SceneOptions | null;
   direction?: DirectionBlueprint | null;
+  continuity?: Continuity | null;
 }
 @Component({
   selector: 'app-storyboard',
-  imports: [FormsModule, RenderOptions, SceneOptionsEditor, CaptionOptions, AudioOptions],
+  imports: [
+    GraphicsOptions,
+    FormsModule,
+    RenderOptions,
+    SceneOptionsEditor,
+    CaptionOptions,
+    AudioOptions,
+  ],
   templateUrl: './storyboard.html',
   styleUrl: './storyboard.scss',
 })
 export class StoryboardEditor {
   scenes = model.required<SceneDraft[]>();
+  branding = model<Branding>(defaultBranding());
+  transitions = model<Transitions>(defaultTransitions());
   ratio = model('9:16');
   voiceId = model('');
   musicId = model('');

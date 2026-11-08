@@ -131,7 +131,15 @@ public class RenderWorker(
         var effects = req.Effects ?? new RenderEffects();
         var audio = req.Audio ?? new AudioTuning();
         var needed = req
-            .AssetIds.Concat(new[] { req.VoiceId, req.MusicId, req.SubtitleId }.OfType<Guid>())
+            .AssetIds.Concat(
+                new[]
+                {
+                    req.VoiceId,
+                    req.MusicId,
+                    req.SubtitleId,
+                    req.Branding?.Logo?.AssetId,
+                }.OfType<Guid>()
+            )
             .Distinct()
             .ToArray();
         var assets = await db
@@ -147,6 +155,7 @@ public class RenderWorker(
         try
         {
             var parts = new List<string>();
+            var partDurations = new List<double>();
             var cache =
                 new Dictionary<(Guid, double, double, string), (string File, double Duration)>();
             var durations = new Dictionary<Guid, double>();
@@ -267,6 +276,7 @@ public class RenderWorker(
                     cache[key] = normalized;
                 }
                 parts.Add(normalized.File);
+                partDurations.Add(normalized.Duration);
                 var actual = Math.Min(remaining, normalized.Duration);
                 if (
                     req.AutoCaptions
@@ -296,6 +306,17 @@ public class RenderWorker(
                     ct
                 );
                 final.AddRange(["-stream_loop", "-1", "-i", cycle]);
+            }
+            else if (req.Transitions is { Style: not "cut" } transition && parts.Count > 1)
+            {
+                var joined = await transition.Join(
+                    parts.ToArray(),
+                    partDurations.ToArray(),
+                    temp,
+                    effects,
+                    ct
+                );
+                final.AddRange(["-i", joined]);
             }
             else
             {
@@ -356,6 +377,12 @@ public class RenderWorker(
                     final.AddRange(["-ss", Number(effects.MusicStart)]);
                 final.AddRange(["-i", store.AssetPath(assets[music])]);
             }
+            int? logoIndex = null;
+            if (req.Branding?.Logo is LogoOverlay inputLogo)
+            {
+                logoIndex = audioIndex;
+                final.AddRange(["-loop", "1", "-i", store.AssetPath(assets[inputLogo.AssetId])]);
+            }
             var hasCaptions = req.SubtitleId is not null || captions.Count > 0;
             if (captions.Count > 0)
                 await File.WriteAllTextAsync(
@@ -380,13 +407,25 @@ public class RenderWorker(
                 videoFilters.Add(
                     $"fade=t=in:st=0:d={Number(fade)},fade=t=out:st={Number(endTime - fade)}:d={Number(fade)}"
                 );
-            if (videoFilters.Count > 0)
+            videoFilters.AddRange(
+                await (req.Branding ?? new BrandingOptions()).TextFilters(temp, ct)
+            );
+            var graph = new List<string>();
+            if (logoIndex is int li && req.Branding?.Logo is LogoOverlay mark)
+            {
+                var baseFilter = videoFilters.Count > 0 ? string.Join(',', videoFilters) : "null";
+                var (x, y) = BrandingOptions.Coordinates(mark.Position, true);
+                graph.Add(
+                    $"[0:v]{baseFilter}[base];[{li}:v]scale={Math.Max(16, (int)(w * mark.Width))}:{h / 4}:force_original_aspect_ratio=decrease,format=rgba,colorchannelmixer=aa={Number(mark.Opacity)}[mark];[base][mark]overlay=x={x}:y={y}:enable='between(t,{Number(mark.Start)},{Number(mark.End)})':eof_action=repeat:shortest=1[vout]"
+                );
+            }
+            else if (videoFilters.Count > 0)
                 final.AddRange(["-vf", string.Join(',', videoFilters)]);
             var audioFade =
                 fade > 0
                     ? $",afade=t=in:st=0:d={Number(fade)},afade=t=out:st={Number(endTime - fade)}:d={Number(fade)}"
                     : "";
-            final.AddRange(["-map", "0:v:0"]);
+            final.AddRange(["-map", logoIndex.HasValue ? "[vout]" : "0:v:0"]);
             var limiter =
                 (effects.Mono ? "aformat=channel_layouts=mono," : "")
                 + "alimiter=limit=0.95:level=false:latency=true";
@@ -395,7 +434,8 @@ public class RenderWorker(
                 var mixer = req.DuckMusic
                     ? $"[{vi}:a]{effects.VoiceFilter(req.VoiceGain, audio, voiceDuration)},asplit=2[v][side];[{mi}:a]{audio.MusicFilter(req.MusicGain, musicDuration)}[m];[m][side]sidechaincompress=threshold=0.02:ratio=8:attack=20:release=300[duck];[v][duck]amix=inputs=2:duration=longest:normalize=0,{limiter}{audioFade}[a]"
                     : $"[{vi}:a]{effects.VoiceFilter(req.VoiceGain, audio, voiceDuration)}[v];[{mi}:a]{audio.MusicFilter(req.MusicGain, musicDuration)}[m];[v][m]amix=inputs=2:duration=longest:normalize=0,{limiter}{audioFade}[a]";
-                final.AddRange(["-filter_complex", mixer, "-map", "[a]"]);
+                graph.Add(mixer);
+                final.AddRange(["-map", "[a]"]);
             }
             else if (voiceIndex is int v)
                 final.AddRange([
@@ -411,14 +451,21 @@ public class RenderWorker(
                     "-map",
                     $"{m}:a",
                 ]);
+            if (graph.Count > 0)
+                final.AddRange([
+                    "-filter_complex_threads",
+                    "1",
+                    "-filter_complex",
+                    string.Join(';', graph),
+                ]);
             final.AddRange([
                 "-t",
                 req.Duration.ToString(CultureInfo.InvariantCulture),
                 "-shortest",
                 "-c:v",
-                videoFilters.Count > 0 ? "libx264" : "copy",
+                videoFilters.Count > 0 || logoIndex.HasValue ? "libx264" : "copy",
             ]);
-            if (videoFilters.Count > 0)
+            if (videoFilters.Count > 0 || logoIndex.HasValue)
                 final.AddRange([
                     "-threads",
                     "2",

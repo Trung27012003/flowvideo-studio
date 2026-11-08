@@ -1,3 +1,5 @@
+import { GraphicsOptions, defaultBranding, defaultTransitions } from './graphics-options';
+import { CreativeWorkspace, Continuity } from './creative-workspace';
 import { StoryArchitect, StoryPlanView, StoryPlanOptions, StoryPlanEdit } from './story-architect';
 import { ProductionStudio, ProductionOptions, ProductionView } from './production-studio';
 import { VideoStudio, VideoRow, VideoRequestOptions } from './video-studio';
@@ -50,6 +52,8 @@ interface Job {
   selector: 'app-root',
   imports: [
     FormsModule,
+    GraphicsOptions,
+    CreativeWorkspace,
     StoryboardEditor,
     RenderOptions,
     CaptionOptions,
@@ -168,6 +172,28 @@ export class App implements OnInit, OnDestroy {
   mergeGap = 0.2;
   boardFit = signal('contain');
   boardFade = signal(0);
+  @ViewChild(StoryboardEditor) storyboardEditor?: StoryboardEditor;
+  branding = signal(defaultBranding());
+  transitions = signal(defaultTransitions());
+  boardBranding = signal(defaultBranding());
+  boardTransitions = signal(defaultTransitions());
+  attachContinuity(event: { sceneId: string; value: Continuity | null }) {
+    if (this.storyboardEditor)
+      this.storyboardEditor.change(event.sceneId, { continuity: event.value });
+    else
+      this.scenes.update((s) =>
+        s.map((scene) =>
+          scene.id === event.sceneId ? { ...scene, continuity: event.value } : scene,
+        ),
+      );
+  }
+  async restoredProject(id: string) {
+    await this.perform(async () => {
+      this.projects.set(await this.api('/projects'));
+      await this.selectProject(id);
+      this.notice.set('Đã khôi phục thành dự án mới, chưa gọi AI.');
+    });
+  }
   effects = signal(defaultEffects());
   boardEffects = signal(defaultEffects());
   savedItems = signal<any[]>([]);
@@ -399,6 +425,10 @@ export class App implements OnInit, OnDestroy {
     this.boardFit.set('contain');
     this.boardFade.set(0);
     this.boardDuck.set(false);
+    this.branding.set(defaultBranding());
+    this.transitions.set(defaultTransitions());
+    this.boardBranding.set(defaultBranding());
+    this.boardTransitions.set(defaultTransitions());
     this.effects.set(defaultEffects());
     this.boardEffects.set(defaultEffects());
     this.clearDerived();
@@ -827,6 +857,8 @@ export class App implements OnInit, OnDestroy {
           fit: this.fit,
           fadeSeconds: this.fadeSeconds,
           duckMusic: this.duckMusic,
+          branding: this.branding(),
+          transitions: this.mode === 'concat' ? this.transitions() : null,
           effects: this.effects(),
           captions: this.captionStyle(),
           audio: this.audioTuning(),
@@ -940,6 +972,8 @@ export class App implements OnInit, OnDestroy {
       fit: this.boardFit(),
       fadeSeconds: this.boardFade(),
       duckMusic: this.boardDuck(),
+      branding: this.boardBranding(),
+      transitions: this.boardTransitions(),
       effects: this.boardEffects(),
       captions: this.boardSubtitleStyle(),
       audio: this.boardAudioTuning(),
@@ -959,6 +993,12 @@ export class App implements OnInit, OnDestroy {
     this.boardFit.set(doc.fit ?? 'contain');
     this.boardFade.set(doc.fadeSeconds ?? 0);
     this.boardDuck.set(doc.duckMusic ?? false);
+    this.boardBranding.set({
+      ...defaultBranding(),
+      ...doc.branding,
+      texts: doc.branding?.texts ?? [],
+    });
+    this.boardTransitions.set({ ...defaultTransitions(), ...doc.transitions });
     this.boardEffects.set({ ...defaultEffects(), ...doc.effects });
     this.boardSubtitleStyle.set({ ...defaultCaptionStyle(), ...doc.captions });
     this.boardAudioTuning.set({ ...defaultAudioTuning(), ...doc.audio });
@@ -978,6 +1018,8 @@ export class App implements OnInit, OnDestroy {
       fit: doc.fit,
       fadeSeconds: doc.fadeSeconds,
       duckMusic: doc.duckMusic,
+      branding: doc.branding,
+      transitions: doc.transitions,
       effects: doc.effects,
       captions: doc.captions,
       audio: doc.audio,
@@ -1687,7 +1729,7 @@ export class App implements OnInit, OnDestroy {
       const result = await this.api('/ai/script', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idea: this.idea }),
+        body: JSON.stringify({ idea: this.idea, projectId: this.projectId() }),
       });
       this.script.set(result.script);
     });

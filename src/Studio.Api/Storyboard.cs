@@ -20,7 +20,8 @@ public record StoryScene(
     double Duration = 5,
     double Start = 0,
     SceneOptions? Options = null,
-    SceneDirection? Direction = null
+    SceneDirection? Direction = null,
+    SceneContinuity? Continuity = null
 );
 
 public record StoryDocument(
@@ -39,7 +40,9 @@ public record StoryDocument(
     bool DuckMusic = false,
     RenderEffects? Effects = null,
     CaptionStyle? Captions = null,
-    AudioTuning? Audio = null
+    AudioTuning? Audio = null,
+    BrandingOptions? Branding = null,
+    ClipTransitions? Transitions = null
 );
 
 public record SaveDocument(int Version, StoryDocument Document);
@@ -201,7 +204,9 @@ public static class Storyboard
             DuckMusic: document.DuckMusic,
             Effects: document.Effects,
             Captions: document.Captions,
-            Audio: document.Audio
+            Audio: document.Audio,
+            Branding: document.Branding,
+            Transitions: document.Transitions
         );
     }
 
@@ -221,6 +226,25 @@ public static class Storyboard
         CancellationToken ct
     )
     {
+        if (
+            doc.Branding is not null && !doc.Branding.Valid()
+            || doc.Transitions is not null && !doc.Transitions.Valid()
+        )
+            return "Chữ/logo/chuyển cảnh không hợp lệ.";
+        if (
+            render
+            && doc.Transitions is { Style: not "cut" }
+            && doc.Scenes?.Count(s => s.Options?.Enabled != false) > 10
+        )
+            return "Chuyển cảnh hỗ trợ tối đa 10 cảnh bật.";
+        if (
+            doc.Branding?.Logo is LogoOverlay logo
+            && !await db.Assets.AnyAsync(
+                a => a.Id == logo.AssetId && a.ProjectId == projectId && a.Kind == "image",
+                ct
+            )
+        )
+            return "Logo phải là ảnh thuộc dự án.";
         if (doc.Audio is not null && !doc.Audio.Valid())
             return "Tùy chỉnh âm thanh không hợp lệ.";
         if (doc.Captions is not null && !doc.Captions.Valid())
@@ -252,6 +276,7 @@ public static class Storyboard
                 s is null
                 || (s.Options is not null && !s.Options.Valid())
                 || (s.Direction is not null && !s.Direction.Valid())
+                || (s.Continuity is not null && !s.Continuity.Valid())
                 || s.Id == Guid.Empty
                 || s.Title is null
                 || s.Title.Length > 120
@@ -273,6 +298,19 @@ public static class Storyboard
             return "Cảnh không hợp lệ: tối đa 30 cảnh, tổng 600 giây, thời lượng mỗi cảnh từ 0,1 giây và điểm vào không âm.";
         if (render && doc.Scenes.Any(s => s.Options?.Enabled != false && s.AssetId is null))
             return "Chọn ảnh/video cho tất cả các cảnh trước khi dựng.";
+        var refs = doc
+            .Scenes.SelectMany(s => s.Continuity?.Items() ?? [])
+            .Select(p => p.Content.ReferenceId)
+            .OfType<Guid>()
+            .Distinct()
+            .ToArray();
+        if (
+            await db.Assets.CountAsync(
+                a => a.ProjectId == projectId && a.Kind == "image" && refs.Contains(a.Id),
+                ct
+            ) != refs.Length
+        )
+            return "Ảnh hồ sơ trong cảnh không thuộc dự án.";
         var ids = doc
             .Scenes.Where(s => s.AssetId.HasValue)
             .Select(s => s.AssetId!.Value)

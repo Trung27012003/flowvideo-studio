@@ -57,6 +57,7 @@ public static class WorkspaceWorkflow
     private static StoryDocument Preset(StoryDocument doc) =>
         doc with
         {
+            Branding = doc.Branding is null ? null : doc.Branding with { Logo = null },
             Idea = "",
             Script = "",
             Scenes = [],

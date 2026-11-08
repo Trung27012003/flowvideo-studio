@@ -40,5 +40,6 @@ public record SceneDirection(
             scene.Direction is not null
                 ? $"\nShot: {scene.Direction.Shot}; camera: {scene.Direction.Camera}; lighting: {scene.Direction.Lighting}; location: {scene.Direction.Location}; characters: {scene.Direction.Characters}."
                 : ""
-        );
+        )
+        + (scene.Continuity is null ? "" : "\n" + scene.Continuity.Prompt());
 }

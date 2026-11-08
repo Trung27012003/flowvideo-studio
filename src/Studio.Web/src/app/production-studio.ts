@@ -122,6 +122,18 @@ export interface ProductionView {
         {{ e.scenes }} cảnh · tạo mới {{ e.newImages }} ảnh, {{ e.newVideos }} video,
         {{ e.newSpeech }} giọng · dùng lại {{ e.reusedMedia }} kết quả AI và
         {{ e.existingMedia }} tư liệu đã gắn. Chưa gửi AI.
+        @if (e.budget; as b) {
+          <br />Dự toán theo giá tự nhập:
+          {{ b.estimatedUsd === null ? 'Chưa biết' : b.estimatedUsd + ' USD' }} · đã giữ
+          {{ b.reservedUsd }} / {{ b.limitUsd }} USD ·
+          {{
+            b.enabled
+              ? b.allowed
+                ? 'Đủ ngân sách'
+                : 'Vượt ngân sách hoặc thiếu đơn giá'
+              : 'Chưa bật chặn ngân sách'
+          }}. Đây chưa phải hóa đơn.
+        }
       </p>
     }
     <h3>Lịch sử quy trình</h3>

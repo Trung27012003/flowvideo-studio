@@ -31,7 +31,11 @@ Tạo dự án → nhập media → chọn cảnh theo thứ tự → chỉnh đ
 
 Đặt biến môi trường `OPENAI_API_KEY` trong terminal chạy backend; `OPENAI_MODEL` mặc định `gpt-4o-mini`. Không đặt key trong Angular hay commit vào Git. File `.env.example` chỉ là mẫu; ứng dụng **không tự đọc `.env`**. Tạo kịch bản, giọng đọc và nhận diện phụ đề đều có thể phát sinh phí. `OPENAI_TTS_MODEL` mặc định `gpt-4o-mini-tts`; STT dùng `whisper-1` để lấy mốc thời gian. Cần model được tài khoản cho phép sử dụng.
 
-Bấm **Lưu kịch bản** để giữ nội dung theo dự án. Có thể chia các đoạn thành cảnh, chọn tư liệu và dựng bằng storyboard; Ảnh có thể tạo riêng bằng nút AI cho từng cảnh; chưa tự tạo toàn bộ tư liệu cho cả kịch bản.
+Bấm **Lưu kịch bản** để giữ nội dung theo dự án. Có thể chia các đoạn thành cảnh, chọn tư liệu và dựng bằng storyboard; Ảnh có thể tạo riêng bằng nút AI cho từng cảnh hoặc tạo theo batch trong quy trình một nút.
+
+## Creative Studio v0.15
+
+**Hồ sơ nhân vật/bối cảnh → gắn bản chụp vào cảnh; chữ/logo/CTA và 8 kiểu chuyển cảnh; backup ZIP kèm media; ngân sách AI theo đơn giá tự nhập.** Có kiểm tra version, scope, SHA-256, rollback khôi phục và giữ dự toán nguyên batch trước khi gọi AI. Cấu hình đồ họa lưu cùng storyboard và đi qua workflow. Ngân sách là dự toán, chưa lấy hóa đơn provider; hồ sơ chưa tự gửi ảnh/khóa khuôn mặt; backup tạo dự án mới và không chạy lại AI. [Cách dùng, API, giới hạn](docs/CREATIVE-STUDIO.md).
 
 ## Phân cảnh có cấu trúc và QA v0.14
 

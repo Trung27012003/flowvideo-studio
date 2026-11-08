@@ -364,6 +364,8 @@ export function compareDocuments(saved: any, draft: any): string {
     'effects',
     'captions',
     'audio',
+    'branding',
+    'transitions',
   ].filter((key) => JSON.stringify(saved[key] ?? null) !== JSON.stringify(draft[key] ?? null));
   return `So với mốc: thêm ${added} cảnh, bỏ ${removed} cảnh, sửa ${changed} cảnh.\nThứ tự/danh sách: ${order ? 'khác' : 'giữ nguyên'}.\nTrường khác: ${settings.length ? settings.join(', ') : 'không có'}.`;
 }

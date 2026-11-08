@@ -152,3 +152,9 @@ StoryPlans lưu request/source/model/fingerprint, original/draft, revision, stat
 SceneDirection optional trên StoryScene giữ tương thích JSON cũ. VisualPrompt ghép metadata vào prompt ảnh/video ở cả endpoint riêng lẻ và ProductionWorkflow trước fingerprint. Purpose chỉ lưu metadata. Editor dùng client keys ổn định qua reorder/clone, loại bỏ keys trước gửi DTO.
 
 RenderQaReports keyed JobId lưu báo cáo point-in-time/recipe hash. RenderWorker inspect bằng ffprobe/SRT sau render trước Succeeded, lỗi đi nhánh Failed/dọn file. Manual POST chỉ cho Succeeded; GET có thể đọc báo cáo lỗi đã lưu. Upsert SQLite atomic, semaphore 2 và probe timeout 20 giây. Duration tolerance tính cả ngân sách frame từng clip; concat không có explicit Scenes chỉ kiểm tra giới hạn tối đa. Không đánh giá nội dung, decode toàn stream hay tự sửa file.
+
+## Creative Studio v0.15
+
+`CreativeProfiles` lưu hồ sơ có version; `SceneContinuity` chụp nội dung, append vào prompt và giữ độc lập với thư viện. Clone/ZIP remap ID và ảnh, JSON portable bỏ liên kết media. Branding/transitions là optional recipe fields: drawtext đọc UTF-8 và tắt expansion, overlay chạy cùng audio graph, xfade trên clip đã chuẩn hóa với tail-clone giữ tổng duration. QA tiếp tục kiểm tra video cuối trước Succeeded.
+
+`ProjectBackup` đóng gói danh mục trong read transaction, stream media/sha vào ZIP, kiểm tra giới hạn giải nén thực và khôi phục thành project mới bằng transaction; failure dọn media mới. Không khôi phục hàng đợi AI, sổ chi phí hay key. `ProjectBudgets`/`BudgetEntries` là bảng additive; một semaphore chung bảo vệ so sánh cap và SaveChanges nguyên tử của reservation + operation. Giá tự nhập, integer micro-USD; thất bại không tự hoàn dự toán. Thứ tự khóa intake: Production → Image → Video → Budget, không giữ Budget khi gọi HTTP. Worker con không ghi phí lần hai. Chỉ hỗ trợ một instance backend; ledger không đồng bộ hóa hóa đơn provider. [Chi tiết](CREATIVE-STUDIO.md).

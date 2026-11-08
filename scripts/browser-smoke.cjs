@@ -2766,6 +2766,14 @@ async function waitForJobs(page, project, predicate) {
       "PASS v0.14 browser: real offline proposal import/review/reorder/save/export/apply with direction metadata and draft isolation; real render plus automatic/manual QA/report download; AI planner enqueue/cancel UI mocked",
     );
 
+    await require("./creative-browser.cjs")(
+      page,
+      root,
+      temp,
+      productionProject,
+      waitForJobs,
+    );
+
     await page.evaluate(() => scrollTo(0, 0));
     await page.screenshot({
       path: path.join(root, "test-results/imported.png"),

@@ -231,6 +231,17 @@ test("checkpoint comparison reports changed, removed, added scenes and settings"
   const {
     compareDocuments,
   } = require("../src/Studio.Web/src/app/creator-utils.ts");
+  assert.match(
+    compareDocuments(
+      { scenes: [], branding: null },
+      {
+        scenes: [],
+        branding: { texts: [{ text: "Title" }] },
+        transitions: { style: "fade" },
+      },
+    ),
+    /branding, transitions/,
+  );
   const result = compareDocuments(
     {
       scenes: [

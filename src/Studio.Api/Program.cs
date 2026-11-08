@@ -42,6 +42,8 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<StudioDb>();
     await db.Database.EnsureCreatedAsync();
     await Storyboard.Upgrade(db);
+    await CreativeProfiles.Upgrade(db);
+    await AiBudget.Upgrade(db);
     await StoryPlans.Upgrade(db);
     await RenderQuality.Upgrade(db);
     await ImageFeatures.Upgrade(db);
@@ -56,9 +58,10 @@ using (var scope = app.Services.CreateScope())
                 .SetProperty(x => x.Message, "Ứng dụng đã dừng giữa chừng. Hãy thử lại.")
         );
 }
+app.MapAiBudget();
 app.UseDefaultFiles();
 app.UseStaticFiles();
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.14.0" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", version = "0.15.0" }));
 app.MapGet(
     "/api/capabilities",
     (IConfiguration c) =>
@@ -205,7 +208,10 @@ app.MapPost(
         if (!await db.Projects.AnyAsync(x => x.Id == id))
             return Results.NotFound();
         if (
-            (req.Loop is not null && !req.Loop.Valid(req.Mode, req.Resolution))
+            (req.Branding is not null && !req.Branding.Valid())
+            || (req.Transitions is not null && !req.Transitions.Valid(req.Mode))
+            || (req.Transitions is { Style: not "cut" } && req.AssetIds?.Length > 10)
+            || (req.Loop is not null && !req.Loop.Valid(req.Mode, req.Resolution))
             || (req.Audio is not null && !req.Audio.Valid())
             || (req.Captions is not null && !req.Captions.Valid())
             || (req.Effects is not null && !req.Effects.Valid())
@@ -301,6 +307,13 @@ app.MapPost(
                     error = "Phụ đề từ cảnh cần storyboard và không dùng đồng thời SRT bên ngoài.",
                 }
             );
+        if (
+            req.Branding?.Logo is LogoOverlay logo
+            && !await db.Assets.AnyAsync(a =>
+                a.Id == logo.AssetId && a.ProjectId == id && a.Kind == "image"
+            )
+        )
+            return Results.BadRequest(new { error = "Logo phải là ảnh thuộc dự án." });
         var job = new RenderJob { ProjectId = id, RequestJson = JsonSerializer.Serialize(req) };
         db.Jobs.Add(job);
         await db.SaveChangesAsync();
@@ -385,13 +398,25 @@ app.MapGet(
 );
 app.MapPost(
     "/api/ai/script",
-    async (ScriptRequest req, IConfiguration c, IHttpClientFactory factory, CancellationToken ct) =>
+    async (
+        ScriptRequest req,
+        StudioDb db,
+        IConfiguration c,
+        IHttpClientFactory factory,
+        CancellationToken ct
+    ) =>
     {
         if (string.IsNullOrWhiteSpace(req.Idea) || req.Idea.Length > 4000)
             return Results.BadRequest(new { error = "Ý tưởng cần từ 1–4000 ký tự." });
         var key = c["OPENAI_API_KEY"];
         if (string.IsNullOrWhiteSpace(key))
             return Results.Problem("Chưa cấu hình OPENAI_API_KEY ở backend.", statusCode: 503);
+        if (
+            req.ProjectId is not Guid project
+            || !await db.Projects.AnyAsync(p => p.Id == project, ct)
+        )
+            return Results.BadRequest(new { error = "Chọn dự án trước khi gọi AI." });
+        await AiBudget.Reserve(db, project, Guid.NewGuid(), [new("story", 1)], ct);
         using var message = new HttpRequestMessage(
             HttpMethod.Post,
             "https://api.openai.com/v1/chat/completions"
@@ -452,6 +477,8 @@ app.MapPost(
 );
 app.MapAudio();
 app.MapStoryboard();
+app.MapProfiles();
+app.MapProjectBackup();
 app.MapStoryPlans();
 app.MapRenderQuality();
 app.MapImages();

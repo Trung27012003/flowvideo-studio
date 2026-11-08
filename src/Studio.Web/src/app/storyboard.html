@@ -1,3 +1,9 @@
+<app-graphics-options
+  [(options)]="branding"
+  [(transitions)]="transitions"
+  [assets]="assets()"
+  [disabled]="disabled()"
+/>
 <section class="panel">
   <div class="top">
     <div>
@@ -366,6 +372,25 @@
               placeholder="Mô tả cảnh để dùng lại khi tạo tư liệu…"
             ></textarea>
           </label>
+          @if (scene.continuity; as continuity) {
+            <div class="continuity-snapshot">
+              <b>Hồ sơ đã chụp:</b>
+              @for (p of continuity.characters; track p.id) {
+                <span>{{ p.content.name }} v{{ p.version }} · </span>
+              }
+              @if (continuity.location; as location) {
+                <span>{{ location.content.name }} v{{ location.version }}</span>
+              }
+              <p>{{ continuity.characterState }}</p>
+              <button
+                class="secondary"
+                (click)="change(scene.id, { continuity: null })"
+                [disabled]="disabled()"
+              >
+                Bỏ bản chụp hồ sơ
+              </button>
+            </div>
+          }
           <button
             class="secondary image-create"
             (click)="generateImage.emit(scene.id)"

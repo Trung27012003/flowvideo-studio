@@ -353,6 +353,34 @@ public static class WorkspaceTools
                     await using var transaction = await db.Database.BeginTransactionAsync(ct);
                     db.Projects.Add(project);
                     db.Assets.AddRange(copies);
+                    var profiles = await db
+                        .CreativeProfiles.AsNoTracking()
+                        .Where(p => p.ProjectId == id)
+                        .ToListAsync(ct);
+                    var profileMap = profiles.ToDictionary(p => p.Id, _ => Guid.NewGuid());
+                    foreach (var profile in profiles)
+                        db.CreativeProfiles.Add(
+                            new CreativeProfile
+                            {
+                                Id = profileMap[profile.Id],
+                                ProjectId = project.Id,
+                                Kind = profile.Kind,
+                                Version = profile.Version,
+                                ContentJson = JsonSerializer.Serialize(
+                                    CreativeProfiles.Snapshot(profile).Content with
+                                    {
+                                        ReferenceId = CreativeProfiles
+                                            .Snapshot(profile)
+                                            .Content.ReferenceId
+                                            is Guid refId
+                                            ? map.GetValueOrDefault(refId)
+                                            : null,
+                                    },
+                                    CreativeProfiles.Web
+                                ),
+                            }
+                        );
+
                     if (doc is not null)
                     {
                         var cloned = doc with
@@ -360,6 +388,14 @@ public static class WorkspaceTools
                             Scenes = doc.Scenes!.Select(s =>
                                     s with
                                     {
+                                        Continuity = SceneContinuity.Map(
+                                            s.Continuity,
+                                            aid =>
+                                                map.TryGetValue(aid, out var mapped)
+                                                    ? mapped
+                                                    : null,
+                                            pid => profileMap.GetValueOrDefault(pid, pid)
+                                        ),
                                         Id = Guid.NewGuid(),
                                         AssetId = s.AssetId is Guid aid
                                             ? map.GetValueOrDefault(aid)
@@ -367,6 +403,12 @@ public static class WorkspaceTools
                                     }
                                 )
                                 .ToArray(),
+                            Branding = doc.Branding?.Logo is LogoOverlay logo
+                                ? doc.Branding with
+                                {
+                                    Logo = logo with { AssetId = map[logo.AssetId] },
+                                }
+                                : doc.Branding,
                             VoiceId = doc.VoiceId is Guid v ? map.GetValueOrDefault(v) : null,
                             MusicId = doc.MusicId is Guid m ? map.GetValueOrDefault(m) : null,
                         };

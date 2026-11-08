@@ -516,10 +516,25 @@ public static class ProductionWorkflow
                                             new { error = "Mã yêu cầu đã dùng cho cấu hình khác." }
                                         );
                                 var plan = await Plan(id, req, db, store, config, ct);
+                                var budgetLines = new BudgetLine[]
+                                {
+                                    new("image", plan.Images.Length),
+                                    new("video", plan.Videos.Sum(v => v.Seconds)),
+                                    new(
+                                        "speech",
+                                        req.Speech
+                                            ? (plan.Document.Scenes ?? [])
+                                                .Where(s => s.Options?.Enabled != false)
+                                                .Sum(s => s.Narration.Length) / 1000m
+                                            : 0
+                                    ),
+                                };
+                                var budgetQuote = await AiBudget.Quote(db, id, budgetLines, ct);
                                 if (!reserve)
                                     return Results.Ok(
                                         new
                                         {
+                                            budget = budgetQuote,
                                             scenes = plan.Steps.Length,
                                             newImages = plan.Images.Length,
                                             newVideos = plan.Videos.Length,
@@ -569,6 +584,7 @@ public static class ProductionWorkflow
                                 db.ImageGenerations.AddRange(plan.Images);
                                 db.VideoGenerations.AddRange(plan.Videos);
                                 db.ProductionRuns.Add(row);
+                                await AiBudget.Reserve(db, id, row.Id, budgetLines, ct);
                                 await db.SaveChangesAsync(ct);
                                 return Results.Accepted(
                                     $"/api/projects/{id}/workflows",

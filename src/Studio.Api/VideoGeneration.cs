@@ -268,6 +268,7 @@ public static class VideoFeatures
                         ReferenceId = req.ReferenceId,
                     };
                     db.VideoGenerations.Add(row);
+                    await AiBudget.Reserve(db, id, row.Id, [new("video", req.Seconds)], ct);
                     await db.SaveChangesAsync(ct);
                     return Results.Accepted(
                         $"/api/projects/{id}/video-generations",

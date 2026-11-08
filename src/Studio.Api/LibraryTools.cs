@@ -304,6 +304,11 @@ public static class LibraryTools
                     ? new StoryDocument(Scenes: [])
                     : JsonSerializer.Deserialize<StoryDocument>(saved.ContentJson)!;
                 bool AudioUse(StoryDocument d) => d.VoiceId == assetId || d.MusicId == assetId;
+                bool GraphicsUse(StoryDocument d) =>
+                    d.Branding?.Logo?.AssetId == assetId
+                    || (d.Scenes ?? []).Any(s =>
+                        s.Continuity?.Items().Any(p => p.Content.ReferenceId == assetId) == true
+                    );
                 var snapshots = await db
                     .SavedWorkspaceItems.AsNoTracking()
                     .Where(x => x.ProjectId == id && x.Kind == "checkpoint")
@@ -312,7 +317,9 @@ public static class LibraryTools
                     .Where(x =>
                     {
                         var d = JsonSerializer.Deserialize<StoryDocument>(x.ContentJson)!;
-                        return AudioUse(d) || d.Scenes!.Any(s => s.AssetId == assetId);
+                        return GraphicsUse(d)
+                            || AudioUse(d)
+                            || d.Scenes!.Any(s => s.AssetId == assetId);
                     })
                     .Select(x => new { x.Id, x.Name })
                     .ToArray();
@@ -327,7 +334,8 @@ public static class LibraryTools
                     return r.AssetIds.Contains(assetId)
                         || r.VoiceId == assetId
                         || r.MusicId == assetId
-                        || r.SubtitleId == assetId;
+                        || r.SubtitleId == assetId
+                        || r.Branding?.Logo?.AssetId == assetId;
                 });
                 return Results.Ok(
                     new
@@ -339,6 +347,7 @@ public static class LibraryTools
                                 s.Title,
                                 enabled = s.Options?.Enabled != false,
                             }),
+                        graphics = GraphicsUse(doc),
                         audio = AudioUse(doc),
                         checkpoints,
                         jobCount,

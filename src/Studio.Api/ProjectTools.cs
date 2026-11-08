@@ -83,9 +83,22 @@ public static class ProjectTools
                 {
                     Scenes = package
                         .Document.Scenes?.Select(s =>
-                            s is null ? null! : s with { AssetId = null, Start = 0 }
+                            s is null
+                                ? null!
+                                : s with
+                                {
+                                    AssetId = null,
+                                    Start = 0,
+                                    Continuity = SceneContinuity.Map(s.Continuity, _ => null),
+                                }
                         )
                         .ToArray(),
+                    Branding = package.Document.Branding is null
+                        ? null
+                        : package.Document.Branding with
+                        {
+                            Logo = null,
+                        },
                     VoiceId = null,
                     MusicId = null,
                 };

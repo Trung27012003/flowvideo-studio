@@ -68,7 +68,7 @@
         ></span
       >
       <div class="header-right">
-        <span class="pill">MVP v0.14</span
+        <span class="pill">MVP v0.15</span
         ><select
           aria-label="Chọn dự án"
           [ngModel]="projectId()"
@@ -146,6 +146,13 @@
       @if (notice()) {
         <div class="alert" role="status">{{ notice() }}</div>
       }
+      <app-creative-workspace
+        [projectId]="projectId()"
+        [assets]="assets()"
+        [scenes]="scenes()"
+        (restored)="restoredProject($event)"
+        (continuity)="attachContinuity($event)"
+      />
       @if (tab() === 'studio') {
         @if (!projectId()) {
           <div class="empty">
@@ -159,6 +166,13 @@
               <app-audio-options [(tuning)]="audioTuning" [disabled]="busy()" />
               <app-caption-options [(style)]="captionStyle" [disabled]="busy()" />
               <app-render-options [(options)]="effects" [disabled]="busy()" />
+              <app-graphics-options
+                [(options)]="branding"
+                [(transitions)]="transitions"
+                [assets]="assets()"
+                [mode]="mode"
+                [disabled]="busy()"
+              />
               <div class="panel-title">
                 <h2>Thiết lập video</h2>
                 <span>01</span>
@@ -898,6 +912,8 @@
               (apply)="applyVideo($event)"
             />
             <app-storyboard
+              [(branding)]="boardBranding"
+              [(transitions)]="boardTransitions"
               [(scenes)]="scenes"
               [(audioTuning)]="boardAudioTuning"
               [(subtitleStyle)]="boardSubtitleStyle"
@@ -1288,27 +1304,29 @@
       }
       @if (tab() === 'roadmap') {
         <section class="panel roadmap">
-          <h2>Đã hoạt động trong v0.14</h2>
+          <h2>Đã hoạt động trong v0.15</h2>
           <p>
-            v0.14 thêm phân cảnh JSON từ ý tưởng/kịch bản, duyệt/sửa và áp dụng với metadata đạo
-            diễn, nhập JSON offline và QA kỹ thuật sau render. Đã có quy trình một nút từ
-            storyboard/kịch bản đến tư liệu, giọng và bản dựng; loop reverse/ping-pong/crossfade. Có
-            tạo video AI từ prompt/ảnh tham chiếu qua Gemini, tạo nhiều cảnh, xử lý giọng/nhạc
-            riêng, công cụ WAV/FLAC/MP4 tắt tiếng/GIF/poster/bảng ảnh/gói giao video và kiểm tra
-            thông số. Có viết hoa đầu câu, dấu câu, bỏ emoji, tìm/lấy đoạn/ghép SRT và xuất CSV.
-            Quản lý dự án và media, cắt điểm vào/ra từng clip, ghép ảnh/video, loop trực tiếp, audio
-            từ file, phụ đề SRT, hàng đợi lưu SQLite và tải MP4. Viết kịch bản, tạo giọng đọc và
-            nhận diện phụ đề AI khi có API key. Chỉnh sửa SRT không cần AI.
+            v0.15 thêm hồ sơ nhân vật/bối cảnh theo bản chụp, chữ/logo/CTA, chuyển cảnh giữ thời
+            lượng, backup ZIP kèm media và khôi phục sang dự án mới. Có ngân sách AI theo đơn giá tự
+            nhập, giữ dự toán nguyên batch và đối soát thủ công. v0.14 thêm phân cảnh JSON từ ý
+            tưởng/kịch bản, duyệt/sửa và áp dụng với metadata đạo diễn, nhập JSON offline và QA kỹ
+            thuật sau render. Đã có quy trình một nút từ storyboard/kịch bản đến tư liệu, giọng và
+            bản dựng; loop reverse/ping-pong/crossfade. Có tạo video AI từ prompt/ảnh tham chiếu qua
+            Gemini, tạo nhiều cảnh, xử lý giọng/nhạc riêng, công cụ WAV/FLAC/MP4 tắt
+            tiếng/GIF/poster/bảng ảnh/gói giao video và kiểm tra thông số. Có viết hoa đầu câu, dấu
+            câu, bỏ emoji, tìm/lấy đoạn/ghép SRT và xuất CSV. Quản lý dự án và media, cắt điểm
+            vào/ra từng clip, ghép ảnh/video, loop trực tiếp, audio từ file, phụ đề SRT, hàng đợi
+            lưu SQLite và tải MP4. Viết kịch bản, tạo giọng đọc và nhận diện phụ đề AI khi có API
+            key. Chỉnh sửa SRT không cần AI.
           </p>
           <h2>Giai đoạn tiếp theo</h2>
-          <p>1. Hồ sơ nhân vật/bối cảnh và alignment phụ đề từng từ.</p>
-          <p>2. Sửa/extend video AI, nhiều ảnh tham chiếu và theo dõi chi phí.</p>
+          <p>1. Alignment phụ đề từng từ và giữ nhận diện nhân vật bằng ảnh.</p>
+          <p>2. Sửa/extend video AI, nhiều ảnh tham chiếu và đồng bộ hóa đơn nhà cung cấp.</p>
           <p>3. Timeline nhiều track và preview proxy (đã có tách đôi cảnh).</p>
           <p>4. Preview mối nối và gợi ý điểm loop tự động.</p>
           <p>5. Cắt video theo transcript và xuất nhiều phiên bản.</p>
           <p class="hint">
-            Editor timeline nhiều track, phân cảnh AI có cấu trúc và đăng mạng xã hội chưa có trong
-            bản này.
+            Timeline nhiều track, alignment từng từ và đăng mạng xã hội chưa có trong bản này.
           </p>
         </section>
       }

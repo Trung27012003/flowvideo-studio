@@ -329,6 +329,7 @@ public static class StoryPlans
                         Model = model,
                     };
                     db.StoryPlans.Add(row);
+                    await AiBudget.Reserve(db, id, row.Id, [new("story", 1)], ct);
                     await db.SaveChangesAsync(ct);
                     return Results.Accepted(
                         $"/api/projects/{id}/story-plans",

@@ -48,7 +48,9 @@ public record RenderRequest(
     RenderEffects? Effects = null,
     CaptionStyle? Captions = null,
     AudioTuning? Audio = null,
-    LoopOptions? Loop = null
+    LoopOptions? Loop = null,
+    BrandingOptions? Branding = null,
+    ClipTransitions? Transitions = null
 );
 
 public record SceneClip(
@@ -63,10 +65,13 @@ public record ClipTrim(Guid AssetId, double Start = 0, double? End = null);
 
 public record NameRequest(string Name);
 
-public record ScriptRequest(string Idea);
+public record ScriptRequest(string Idea, Guid? ProjectId = null);
 
 public class StudioDb(DbContextOptions<StudioDb> options) : DbContext(options)
 {
+    public DbSet<ProjectBudget> ProjectBudgets => Set<ProjectBudget>();
+    public DbSet<BudgetEntry> BudgetEntries => Set<BudgetEntry>();
+    public DbSet<CreativeProfile> CreativeProfiles => Set<CreativeProfile>();
     public DbSet<AssetPreference> AssetPreferences => Set<AssetPreference>();
     public DbSet<SavedWorkspaceItem> SavedWorkspaceItems => Set<SavedWorkspaceItem>();
     public DbSet<RenderQaReport> RenderQaReports => Set<RenderQaReport>();
@@ -96,6 +101,16 @@ public class StudioDb(DbContextOptions<StudioDb> options) : DbContext(options)
             .HasOne<RenderJob>()
             .WithOne()
             .HasForeignKey<RenderQaReport>(x => x.JobId);
+        b.Entity<ProjectBudget>().HasKey(x => x.ProjectId);
+        b.Entity<ProjectBudget>()
+            .HasOne<Project>()
+            .WithOne()
+            .HasForeignKey<ProjectBudget>(x => x.ProjectId);
+        b.Entity<BudgetEntry>().HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId);
+        b.Entity<BudgetEntry>().HasIndex(x => new { x.OperationId, x.Kind }).IsUnique();
+        b.Entity<BudgetEntry>().HasIndex(x => new { x.ProjectId, x.CreatedAt });
+        b.Entity<CreativeProfile>().HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId);
+        b.Entity<CreativeProfile>().HasIndex(x => new { x.ProjectId, x.Kind });
         b.Entity<AssetPreference>().HasKey(x => x.AssetId);
         b.Entity<AssetPreference>()
             .HasOne<Asset>()

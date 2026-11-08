@@ -14,6 +14,7 @@ public static class AudioEndpoints
                 StudioDb db,
                 Storage store,
                 AudioProvider provider,
+                IConfiguration config,
                 CancellationToken ct
             ) =>
             {
@@ -35,6 +36,18 @@ public static class AudioEndpoints
                             error = "Lời đọc cần 1–4.000 ký tự, tên 1–120 ký tự, giọng hợp lệ và tốc độ 0,5–1,5.",
                         }
                     );
+                if (string.IsNullOrWhiteSpace(config["OPENAI_API_KEY"]))
+                    return Results.Problem(
+                        "Chưa cấu hình OPENAI_API_KEY ở backend.",
+                        statusCode: 503
+                    );
+                await AiBudget.Reserve(
+                    db,
+                    id,
+                    Guid.NewGuid(),
+                    [new("speech", req.Text.Length / 1000m)],
+                    ct
+                );
                 return await Handle(
                     async () =>
                     {
@@ -161,6 +174,13 @@ public static class AudioEndpoints
                                     audio,
                                 ],
                                 temp,
+                                ct
+                            );
+                            await AiBudget.Reserve(
+                                db,
+                                id,
+                                Guid.NewGuid(),
+                                [new("transcription", (decimal)duration / 60m)],
                                 ct
                             );
                             var cues = await provider.Transcribe(audio, req.Language, ct);

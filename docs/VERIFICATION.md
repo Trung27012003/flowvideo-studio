@@ -1,4 +1,4 @@
-# Kiểm chứng bản v0.14
+# Kiểm chứng bản v0.15
 
 Đã chạy trong môi trường Linux với .NET SDK 10.0.403, Node.js 24 và FFmpeg:
 
@@ -136,3 +136,17 @@ Lệnh giữ như trước. Xem [Production](PRODUCTION.md), [Loops](LOOPS.md) c
 Browser dùng import/review/save/export/apply thật, giữ document trước apply, reorder/duplicate/remove scene không tráo form fields, metadata direction đi qua storyboard → render, automatic/manual QA và JSON download, mobile layout. Phần enqueue/cancel AI planner UI được route-mock; hợp đồng provider kiểm tra ở .NET. Toàn bộ browser regression v0.7–v0.13 và FFmpeg DSP/pixel smoke tiếp tục chạy. Không có key thật/yêu cầu AI tính phí.
 
 Nguồn và mức giới hạn QA: [STORY-ARCHITECT](STORY-ARCHITECT.md).
+
+## v0.15
+
+Đã chạy ngày 08/11/2026: **142 test .NET (thêm 20), 22 test Node**, Angular production build, smoke FFmpeg và toàn bộ Playwright regression v0.7–v0.15 đều qua. Backend build không có lỗi/cảnh báo. Các test AI dùng HTTP handler mô phỏng, không gửi yêu cầu tính phí; không xác nhận chất lượng tạo video/giọng/giữ khuôn mặt của provider thực tế.
+
+- Hồ sơ: tạo/sửa/xóa, version conflict, scope ảnh và loại hồ sơ, snapshot giữ nguyên sau sửa/xóa, prompt có trạng thái, gói JSON và import nguyên tử. Clone/JSON import/ZIP remap hoặc detach ảnh/logo đúng phạm vi.
+- Render thật: chữ Unicode và ký tự đặc biệt xuất hiện trong decoded pixels; logo chỉ xuất hiện đúng cửa sổ thời gian, có voice + music; fade/wipeleft/smoothleft ở 24/30/60 fps đổi pixel và giữ tổng duration, mốc SRT/audio. Request sai/ảnh ngoài dự án/null asset IDs bị chặn. Các kiểu còn lại dùng cùng allowlist/engine xfade, chưa có bài pixel riêng cho từng kiểu.
+- Ngân sách: hai ảnh đồng thời vượt cap chỉ nhận một; cache không giữ thêm; giá chưa biết chặn trước HTTP, reprice và đối soát giữ lịch sử; thiếu key không ghi chi phí. Video/phân cảnh/TTS/STT/script trực tiếp bị chặn trước provider khi vượt cap. Plan báo giá, batch bị chặn không có child/reservation rác; start lặp lại không giữ phí hai lần. Giá trị micro-USD, nhóm quote và JSON export được kiểm tra.
+- Backup: media độc lập, snapshot/hồ sơ/branding/checkpoint/favorite/tag/note được khôi phục với ID mới; xóa file nguồn vẫn render bản khôi phục được. SHA sai, entry lạ/traversal, scene null, tham chiếu thiếu và header ZIP khai báo kích thước sai bị từ chối; không tạo project/file rác. Không chạy lại AI và không sao chép ngân sách nguồn.
+- Browser chạy API thật cho hồ sơ, gắn snapshot/sửa thư viện, đồ họa/chuyển cảnh, ngân sách/quote/xuất sổ, download ZIP/restore, render và QA của dự án khôi phục. Kiểm tra form sau khi DOM cập nhật để tránh nhập trước khi ngModel nạp dữ liệu. Viewport 390 px của workbench mở và màn Studio/Storyboard đều không tràn; không có page errors.
+
+![Creative Studio sau khôi phục và render](creative-studio.png)
+
+[Cách dùng, API và giới hạn](CREATIVE-STUDIO.md). ZIP là backup dự án kèm media, không phải backup toàn database. Ngân sách theo giá tự nhập, chưa đồng bộ hóa đơn; snapshot hồ sơ chưa phải khóa nhận diện bằng ảnh.
